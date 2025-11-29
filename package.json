@@ -4,6 +4,7 @@
   "description": "MyKeys API - Secure secrets management system with GCP Secret Manager integration",
   "main": "server.js",
   "scripts": {
+    "vercel-build": "npm run build:marketing",
     "start": "node server.js",
     "mcp": "tsx mcp-server.ts",
     "mcp:dev": "tsx watch mcp-server.ts",
