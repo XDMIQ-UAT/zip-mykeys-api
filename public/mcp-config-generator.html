@@ -548,8 +548,25 @@
         
         let tokenVerifiedEmail = '';
         
-        // Token MFA Request Form
-        document.getElementById('tokenMfaRequestForm').addEventListener('submit', async (e) => {
+        // Setup token form event listeners
+        function setupTokenFormListeners() {
+            const tokenMfaRequestForm = document.getElementById('tokenMfaRequestForm');
+            const tokenForm = document.getElementById('tokenForm');
+            
+            if (!tokenMfaRequestForm || !tokenForm) {
+                console.error('Token forms not found');
+                return;
+            }
+            
+            // Remove existing listeners by cloning
+            const newRequestForm = tokenMfaRequestForm.cloneNode(true);
+            tokenMfaRequestForm.parentNode.replaceChild(newRequestForm, tokenMfaRequestForm);
+            
+            const newTokenForm = tokenForm.cloneNode(true);
+            tokenForm.parentNode.replaceChild(newTokenForm, tokenForm);
+            
+            // Token MFA Request Form
+            newRequestForm.addEventListener('submit', async (e) => {
             e.preventDefault();
             
             const email = document.getElementById('tokenEmail').value.trim();
@@ -586,10 +603,10 @@
                 tokenOutput.textContent = '';
                 resultBox.classList.add('show');
             }
-        });
-        
-        // Token Form (Step 2: Verify & Generate)
-        document.getElementById('tokenForm').addEventListener('submit', async (e) => {
+            });
+            
+            // Token Form (Step 2: Verify & Generate)
+            newTokenForm.addEventListener('submit', async (e) => {
             e.preventDefault();
             
             const code = document.getElementById('tokenMfaCode').value.replace(/\D/g, '').slice(0, 4);
@@ -660,7 +677,8 @@
                 tokenOutput.textContent = '';
                 resultBox.classList.add('show');
             }
-        });
+            });
+        }
         
         function resendTokenCode() {
             tokenVerifiedEmail = '';
@@ -756,14 +774,16 @@
         }
         
         // Initialize on page load
-        if (document.readyState === 'loading') {
-            document.addEventListener('DOMContentLoaded', () => {
-                setupServerPathListener();
-                updateWorkflowIndicator('config'); // Start with config tab (unified flow)
-            });
-        } else {
+        function initializePage() {
             setupServerPathListener();
             updateWorkflowIndicator('config'); // Start with config tab (unified flow)
+            setupTokenFormListeners(); // Setup token form listeners
+        }
+        
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', initializePage);
+        } else {
+            initializePage();
         }
         
         // Config Form
