@@ -14,7 +14,7 @@ export default function Home() {
             </div>
             <h1 className="hero-title">
               Secure Credentials for
-              <span className="gradient-text"> AI Agents</span>
+              <span className="hero-title-accent"> AI Agents</span>
             </h1>
             <p className="hero-description">
               MyKeys.zip is your friendly companion for managing credentials across AI development workflows. 
