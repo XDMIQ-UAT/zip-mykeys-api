@@ -1,0 +1,149 @@
+.docs {
+  width: 100%;
+}
+
+.docs-hero {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  padding: 80px 0 60px;
+  text-align: center;
+}
+
+.docs-hero h1 {
+  font-size: 48px;
+  font-weight: 700;
+  margin-bottom: 20px;
+}
+
+.docs-hero .lead {
+  font-size: 22px;
+  opacity: 0.95;
+}
+
+.docs-content {
+  padding: 80px 0;
+}
+
+.docs-grid {
+  display: grid;
+  gap: 40px;
+}
+
+.docs-section {
+  background: white;
+  padding: 40px;
+  border-radius: 12px;
+  box-shadow: var(--shadow-md);
+}
+
+.docs-section h2 {
+  font-size: 32px;
+  font-weight: 700;
+  margin-bottom: 24px;
+  color: var(--text-dark);
+}
+
+.docs-section h3 {
+  font-size: 24px;
+  font-weight: 600;
+  margin-top: 32px;
+  margin-bottom: 16px;
+  color: var(--text-dark);
+}
+
+.docs-section p {
+  font-size: 16px;
+  line-height: 1.8;
+  color: var(--text-light);
+  margin-bottom: 16px;
+}
+
+.docs-section ul,
+.docs-section ol {
+  margin-left: 24px;
+  margin-bottom: 16px;
+}
+
+.docs-section li {
+  font-size: 16px;
+  line-height: 1.8;
+  color: var(--text-light);
+  margin-bottom: 8px;
+}
+
+.docs-section code {
+  background: var(--bg-light);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-family: 'Fira Code', 'Courier New', monospace;
+  font-size: 14px;
+  color: var(--primary);
+}
+
+.code-block {
+  background: #1e1e1e;
+  border-radius: 8px;
+  padding: 24px;
+  overflow-x: auto;
+  margin: 20px 0;
+}
+
+.code-block pre {
+  margin: 0;
+  color: #d4d4d4;
+  font-family: 'Fira Code', 'Courier New', monospace;
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.code-block code {
+  background: transparent;
+  padding: 0;
+  color: #d4d4d4;
+}
+
+.endpoint-list {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.endpoint {
+  padding: 20px;
+  background: var(--bg-light);
+  border-radius: 8px;
+  border-left: 4px solid var(--primary);
+}
+
+.endpoint code {
+  display: block;
+  font-size: 16px;
+  font-weight: 600;
+  margin-bottom: 8px;
+  color: var(--primary);
+  background: transparent;
+}
+
+.endpoint p {
+  margin: 0;
+  color: var(--text-light);
+}
+
+@media (max-width: 768px) {
+  .docs-hero h1 {
+    font-size: 36px;
+  }
+
+  .docs-section {
+    padding: 24px;
+  }
+
+  .code-block {
+    padding: 16px;
+    font-size: 12px;
+  }
+}
+
+
+
+

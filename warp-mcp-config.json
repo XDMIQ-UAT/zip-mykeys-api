@@ -1,0 +1,23 @@
+{
+  "mcpServers": {
+    "mykeys-zip": {
+      "command": "node",
+      "args": [
+        "E:\\zip-myl-mykeys-api\\dist\\mcp-server.js"
+      ],
+      "env": {
+        "MYKEYS_URL": "https://mykeys.zip",
+        "MYKEYS_USER": "admin",
+        "MYKEYS_PASS": "XRi6TgSrwfeuK8taYzhknoJc",
+        "MCP_CLIENT_ID": "warp-agent",
+        "MCP_CLIENT_TYPE": "warp",
+        "MCP_SYNC_ENABLED": "true"
+      }
+    }
+  }
+}
+
+
+
+
+

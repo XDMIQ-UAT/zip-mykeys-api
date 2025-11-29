@@ -1,0 +1,19 @@
+{
+  "mcpServers": {
+    "mykeys-zip": {
+      "command": "npx",
+      "args": [
+        "tsx",
+        "/path/to/mykeys/mcp-server.ts"
+      ],
+      "env": {
+        "MYKEYS_URL": "https://mykeys.zip",
+        "MCP_TOKEN": "YOUR_GENERATED_TOKEN_HERE",
+        "MCP_CLIENT_ID": "cursor-agent",
+        "MCP_CLIENT_TYPE": "cursor",
+        "MCP_SYNC_ENABLED": "true"
+      }
+    }
+  }
+}
+

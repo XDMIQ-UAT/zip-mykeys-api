@@ -1,0 +1,802 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MCP Configuration Generator - MyKeys.zip</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+        
+        .container {
+            background: white;
+            border-radius: 16px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            max-width: 800px;
+            width: 100%;
+            padding: 40px;
+        }
+        
+        h1 {
+            color: #333;
+            margin-bottom: 10px;
+            font-size: 28px;
+        }
+        
+        .subtitle {
+            color: #666;
+            margin-bottom: 30px;
+            font-size: 14px;
+        }
+        
+        .tabs {
+            display: flex;
+            border-bottom: 2px solid #e0e0e0;
+            margin-bottom: 30px;
+        }
+        
+        .tab {
+            padding: 12px 24px;
+            cursor: pointer;
+            border: none;
+            background: none;
+            font-size: 16px;
+            color: #666;
+            border-bottom: 3px solid transparent;
+            transition: all 0.3s;
+        }
+        
+        .tab.active {
+            color: #667eea;
+            border-bottom-color: #667eea;
+            font-weight: 600;
+        }
+        
+        .tab-content {
+            display: none;
+        }
+        
+        .tab-content.active {
+            display: block;
+        }
+        
+        /* Workflow Progress Indicator */
+        .workflow-indicator {
+            background: #f8f9fa;
+            border-radius: 8px;
+            padding: 16px 20px;
+            margin-bottom: 24px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 12px;
+        }
+        
+        .workflow-steps {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+        
+        .workflow-step {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            padding: 6px 12px;
+            border-radius: 6px;
+            font-size: 13px;
+            transition: all 0.2s;
+        }
+        
+        .workflow-step.active {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            font-weight: 600;
+        }
+        
+        .workflow-step.completed {
+            background: #d4edda;
+            color: #155724;
+        }
+        
+        .workflow-step.pending {
+            background: #e9ecef;
+            color: #6c757d;
+        }
+        
+        .workflow-step-number {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            font-size: 11px;
+            font-weight: 600;
+            margin-right: 4px;
+        }
+        
+        .workflow-step.active .workflow-step-number {
+            background: rgba(255, 255, 255, 0.3);
+        }
+        
+        .workflow-step.completed .workflow-step-number {
+            background: #28a745;
+            color: white;
+        }
+        
+        .workflow-step.pending .workflow-step-number {
+            background: #6c757d;
+            color: white;
+        }
+        
+        .workflow-separator {
+            color: #ccc;
+            margin: 0 4px;
+        }
+        
+        .form-group {
+            margin-bottom: 20px;
+        }
+        
+        label {
+            display: block;
+            margin-bottom: 8px;
+            color: #333;
+            font-weight: 500;
+            font-size: 14px;
+        }
+        
+        input, select {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            font-size: 14px;
+            transition: border-color 0.3s;
+        }
+        
+        input:focus, select:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+        
+        .help-text {
+            font-size: 12px;
+            color: #666;
+            margin-top: 4px;
+        }
+        
+        button {
+            width: 100%;
+            padding: 14px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s;
+            margin-top: 10px;
+        }
+        
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(102, 126, 234, 0.4);
+        }
+        
+        .result-box {
+            margin-top: 30px;
+            padding: 20px;
+            background: #f5f5f5;
+            border-radius: 8px;
+            display: none;
+        }
+        
+        .result-box.show {
+            display: block;
+        }
+        
+        .result-box h3 {
+            margin-bottom: 15px;
+            color: #333;
+        }
+        
+        .json-output {
+            font-family: 'Courier New', monospace;
+            background: white;
+            padding: 15px;
+            border-radius: 4px;
+            border: 1px solid #ddd;
+            overflow-x: auto;
+            font-size: 12px;
+            white-space: pre;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+        
+        .copy-btn {
+            margin-top: 15px;
+            padding: 10px 20px;
+            background: #667eea;
+            font-size: 14px;
+        }
+        
+        .info-box {
+            background: #e7f3ff;
+            border-left: 4px solid #2196F3;
+            padding: 15px;
+            margin-bottom: 20px;
+            border-radius: 4px;
+        }
+        
+        .info-box p {
+            margin: 5px 0;
+            font-size: 13px;
+            color: #1976D2;
+        }
+        
+        .step-number {
+            display: inline-block;
+            width: 24px;
+            height: 24px;
+            background: #667eea;
+            color: white;
+            border-radius: 50%;
+            text-align: center;
+            line-height: 24px;
+            font-size: 12px;
+            font-weight: bold;
+            margin-right: 8px;
+        }
+        
+        .steps {
+            margin-bottom: 20px;
+        }
+        
+        .step {
+            margin-bottom: 15px;
+            padding: 10px;
+            background: #f9f9f9;
+            border-radius: 4px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔧 MCP Configuration Generator</h1>
+        <p class="subtitle">Generate Cursor/Warp MCP configuration from web interface</p>
+        
+        <!-- Workflow Progress Indicator -->
+        <div class="workflow-indicator">
+            <div class="workflow-steps" id="workflowSteps">
+                <div class="workflow-step active" data-tab="token">
+                    <span class="workflow-step-number">1</span>
+                    <span>Generate Token</span>
+                </div>
+                <span class="workflow-separator">→</span>
+                <div class="workflow-step pending" data-tab="config">
+                    <span class="workflow-step-number">2</span>
+                    <span>Configuration</span>
+                </div>
+                <span class="workflow-separator">→</span>
+                <div class="workflow-step pending" data-tab="instructions">
+                    <span class="workflow-step-number">3</span>
+                    <span>Instructions</span>
+                </div>
+            </div>
+        </div>
+        
+        <div class="tabs">
+            <button class="tab active" onclick="showTab('token')">Generate Token</button>
+            <button class="tab" onclick="showTab('config')">Configuration</button>
+            <button class="tab" onclick="showTab('instructions')">Instructions</button>
+        </div>
+        
+        <!-- Configuration Tab -->
+        <div id="config-tab" class="tab-content active">
+            <div class="info-box">
+                <p><strong>Quick Start:</strong> Generate a token first, then create your configuration.</p>
+            </div>
+            
+            <form id="configForm">
+                <div class="form-group">
+                    <label for="mcpToken">MCP Token *</label>
+                    <input type="text" id="mcpToken" name="mcpToken" placeholder="Generate token in 'Generate Token' tab" required>
+                    <span class="help-text">Get your token from the 'Generate Token' tab</span>
+                </div>
+                
+                <div class="form-group">
+                    <label for="clientId">Client ID</label>
+                    <input type="text" id="clientId" name="clientId" value="cursor-agent" placeholder="e.g., cursor-agent, warp-agent">
+                    <span class="help-text">Unique identifier for this client</span>
+                </div>
+                
+                <div class="form-group">
+                    <label for="clientType">Client Type</label>
+                    <select id="clientType" name="clientType">
+                        <option value="cursor">Cursor</option>
+                        <option value="warp">Warp</option>
+                        <option value="other">Other</option>
+                    </select>
+                </div>
+                
+                <div class="form-group">
+                    <label for="serverSource">MCP Server Source</label>
+                    <select id="serverSource" name="serverSource">
+                        <option value="hosted" selected>Download from mykeys.zip (Recommended)</option>
+                        <option value="local">Local file path</option>
+                    </select>
+                    <span class="help-text">Choose to download from mykeys.zip or use a local file</span>
+                </div>
+                
+                <div class="form-group" id="serverPathGroup">
+                    <label for="serverPath">MCP Server Path</label>
+                    <input type="text" id="serverPath" name="serverPath" placeholder="Will be set automatically if using hosted version">
+                    <span class="help-text" id="serverPathHelp">
+                        <strong>Hosted:</strong> Downloads from <code>https://mykeys.zip/mcp-server.js</code> automatically<br>
+                        <strong>Local Examples:</strong><br>
+                        • Windows: <code>E:\zip-myl-mykeys-api\mcp-server.js</code> or <code>E:/zip-myl-mykeys-api/mcp-server.js</code><br>
+                        • macOS/Linux: <code>/usr/local/lib/mykeys/mcp-server.js</code> or <code>~/mykeys/mcp-server.js</code><br>
+                        • npm package: <code>node_modules/@mykeys/mcp-server/dist/index.js</code>
+                    </span>
+                </div>
+                
+                <div class="form-group">
+                    <label for="mykeysUrl">MyKeys URL</label>
+                    <input type="text" id="mykeysUrl" name="mykeysUrl" value="https://mykeys.zip" placeholder="https://mykeys.zip">
+                </div>
+                
+                <button type="submit">Generate Configuration</button>
+            </form>
+            
+            <div class="result-box" id="configResult">
+                <h3>✅ Configuration Generated</h3>
+                <p>Copy this JSON and paste it into your Cursor MCP settings:</p>
+                <div class="json-output" id="configOutput"></div>
+                <button class="copy-btn" onclick="copyConfig()">Copy Configuration</button>
+            </div>
+        </div>
+        
+        <!-- Configuration Tab -->
+        <div id="config-tab" class="tab-content">
+            <div class="info-box">
+                <p><strong>Generate Token:</strong> Create a secure token for MCP authentication</p>
+            </div>
+            
+            <form id="tokenForm">
+                <div class="form-group">
+                    <label for="username">Admin Username</label>
+                    <input type="text" id="username" name="username" value="admin" required>
+                </div>
+                
+                <div class="form-group">
+                    <label for="password">Admin Password</label>
+                    <input type="password" id="password" name="password" required>
+                </div>
+                
+                <div class="form-group">
+                    <label for="tokenClientId">Client ID</label>
+                    <input type="text" id="tokenClientId" name="tokenClientId" placeholder="e.g., cursor-agent" required>
+                </div>
+                
+                <div class="form-group">
+                    <label for="tokenClientType">Client Type</label>
+                    <select id="tokenClientType" name="tokenClientType" required>
+                        <option value="cursor">Cursor</option>
+                        <option value="warp">Warp</option>
+                        <option value="other">Other</option>
+                    </select>
+                </div>
+                
+                <div class="form-group">
+                    <label for="expiresInDays">Expires In (days)</label>
+                    <input type="number" id="expiresInDays" name="expiresInDays" value="90" min="1" max="365" required>
+                </div>
+                
+                <div class="form-group">
+                    <label style="display: flex; align-items: start; gap: 8px; cursor: pointer;">
+                        <input type="checkbox" id="tokenEcosystemAcknowledged" name="tokenEcosystemAcknowledged" required style="margin-top: 4px;">
+                        <span style="font-size: 13px;">
+                            I have read and acknowledge the <a href="https://xdmiq.com" target="_blank" rel="noopener noreferrer">xdmiq.com</a>, 
+                            <a href="https://cosmiciq.org" target="_blank" rel="noopener noreferrer">cosmiciq.org</a>, 
+                            <a href="https://mykeys.zip" target="_blank" rel="noopener noreferrer">mykeys.zip</a>, 
+                            <a href="https://myl.zip" target="_blank" rel="noopener noreferrer">myl.zip</a>, 
+                            and all other owned products ecosystem, including Terms of Service and Privacy Policy.
+                        </span>
+                    </label>
+                </div>
+                
+                <button type="submit">Generate Token</button>
+            </form>
+            
+            <div class="result-box" id="tokenResult">
+                <h3 id="tokenResultTitle"></h3>
+                <p id="tokenResultMessage"></p>
+                <div class="json-output" id="tokenOutput"></div>
+                <button class="copy-btn" onclick="copyToken()">Copy Token</button>
+            </div>
+        </div>
+        
+        <!-- Instructions Tab -->
+        <div id="instructions-tab" class="tab-content">
+            <div class="steps">
+                <div class="step">
+                    <span class="step-number">1</span>
+                    <strong>Generate Token</strong>
+                    <p>Go to the "Generate Token" tab and create a token using your admin credentials.</p>
+                </div>
+                
+                <div class="step">
+                    <span class="step-number">2</span>
+                    <strong>Copy Token</strong>
+                    <p>Copy the generated token - it will not be shown again!</p>
+                </div>
+                
+                <div class="step">
+                    <span class="step-number">3</span>
+                    <strong>Create Configuration</strong>
+                    <p>Go to the "Configuration" tab, paste your token, and generate the JSON configuration.</p>
+                </div>
+                
+                <div class="step">
+                    <span class="step-number">4</span>
+                    <strong>Add to Cursor</strong>
+                    <p>Copy the generated JSON and add it to Cursor's MCP settings:</p>
+                    <ul style="margin-left: 20px; margin-top: 10px;">
+                        <li><strong>Windows:</strong> <code>%APPDATA%\Cursor\User\globalStorage\saoudrizwan.claude-dev\settings\cline_mcp_settings.json</code></li>
+                        <li><strong>macOS:</strong> <code>~/Library/Application Support/Cursor/User/globalStorage/saoudrizwan.claude-dev/settings/cline_mcp_settings.json</code></li>
+                        <li><strong>Linux:</strong> <code>~/.config/Cursor/User/globalStorage/saoudrizwan.claude-dev/settings/cline_mcp_settings.json</code></li>
+                    </ul>
+                    <p style="margin-top: 10px;">Or use Cursor Settings → Features → Model Context Protocol</p>
+                </div>
+                
+                <div class="step">
+                    <span class="step-number">6</span>
+                    <strong>Restart Cursor</strong>
+                    <p>Restart Cursor to load the new MCP configuration.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        let generatedToken = '';
+        let generatedConfig = '';
+        
+        function updateWorkflowIndicator(activeTab) {
+            const steps = {
+                'token': 1,
+                'config': 2,
+                'instructions': 3
+            };
+            
+            const activeStep = steps[activeTab] || 1;
+            
+            document.querySelectorAll('.workflow-step').forEach((step, index) => {
+                const stepNum = index + 1;
+                step.classList.remove('active', 'completed', 'pending');
+                
+                if (stepNum < activeStep) {
+                    step.classList.add('completed');
+                } else if (stepNum === activeStep) {
+                    step.classList.add('active');
+                } else {
+                    step.classList.add('pending');
+                }
+            });
+        }
+        
+        function showTab(tabName) {
+            // Hide all tabs
+            document.querySelectorAll('.tab-content').forEach(tab => {
+                tab.classList.remove('active');
+            });
+            document.querySelectorAll('.tab').forEach(tab => {
+                tab.classList.remove('active');
+            });
+            
+            // Show selected tab
+            document.getElementById(tabName + '-tab').classList.add('active');
+            event.target.classList.add('active');
+            
+            // Update workflow indicator
+            updateWorkflowIndicator(tabName);
+        }
+        
+        // Token Form
+        document.getElementById('tokenForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const username = document.getElementById('username').value;
+            const password = document.getElementById('password').value;
+            const clientId = document.getElementById('tokenClientId').value;
+            const clientType = document.getElementById('tokenClientType').value;
+            const expiresInDays = parseInt(document.getElementById('expiresInDays').value);
+            const ecosystemAcknowledged = document.getElementById('tokenEcosystemAcknowledged').checked;
+            
+            if (!ecosystemAcknowledged) {
+                alert('Please acknowledge the ecosystem terms and conditions.');
+                return;
+            }
+            
+            const resultBox = document.getElementById('tokenResult');
+            const resultTitle = document.getElementById('tokenResultTitle');
+            const resultMessage = document.getElementById('tokenResultMessage');
+            const tokenOutput = document.getElementById('tokenOutput');
+            
+            try {
+                const auth = btoa(`${username}:${password}`);
+                
+                const response = await fetch('/api/mcp/token/generate', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Basic ${auth}`,
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        clientId,
+                        clientType,
+                        expiresInDays,
+                    }),
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok && data.success) {
+                    generatedToken = data.token;
+                    
+                    resultTitle.textContent = '✅ Token Generated Successfully!';
+                    resultMessage.innerHTML = `<strong>Important:</strong> Save this token now - it will not be shown again!<br>Expires: ${new Date(data.expiresAt).toLocaleDateString()}`;
+                    tokenOutput.textContent = data.token;
+                    resultBox.classList.add('show');
+                    
+                    // Auto-fill token in config form
+                    document.getElementById('mcpToken').value = data.token;
+                    document.getElementById('clientId').value = clientId;
+                    document.getElementById('clientType').value = clientType;
+                    
+                    // Mark token generation step as completed in workflow
+                    const tokenStep = document.querySelector('.workflow-step[data-tab="token"]');
+                    if (tokenStep) {
+                        tokenStep.classList.remove('active', 'pending');
+                        tokenStep.classList.add('completed');
+                    }
+                } else {
+                    throw new Error(data.error || data.message || 'Failed to generate token');
+                }
+            } catch (error) {
+                resultTitle.textContent = '❌ Error';
+                resultMessage.textContent = error.message || 'Failed to generate token. Check your credentials.';
+                tokenOutput.textContent = '';
+                resultBox.classList.add('show');
+            }
+        });
+        
+        // Update server path based on source selection
+        function updateServerPath() {
+            const serverSource = document.getElementById('serverSource');
+            const serverPathInput = document.getElementById('serverPath');
+            const serverPathHelp = document.getElementById('serverPathHelp');
+            
+            if (!serverSource || !serverPathInput || !serverPathHelp) {
+                console.error('Required elements not found');
+                return;
+            }
+            
+            const sourceValue = serverSource ? serverSource.value : 'local';
+            
+            if (sourceValue === 'hosted') {
+                // Auto-detect OS and set appropriate default path
+                const isWindows = navigator.platform.toLowerCase().includes('win');
+                let defaultPath;
+                if (isWindows) {
+                    // Use PowerShell environment variable syntax
+                    defaultPath = '$env:USERPROFILE\\.mykeys\\mcp-server.js';
+                } else {
+                    defaultPath = '~/.mykeys/mcp-server.js';
+                }
+                
+                // Remove readonly attribute and set value
+                serverPathInput.removeAttribute('readonly');
+                serverPathInput.value = defaultPath;
+                serverPathInput.placeholder = 'Local path after download';
+                serverPathHelp.innerHTML = `
+                    <strong>Hosted Download:</strong> The MCP server will be downloaded from <code>https://mykeys.zip/mcp-server.js</code><br>
+                    <strong>Download Instructions:</strong><br>
+                    • <strong>Windows (PowerShell):</strong><br>
+                      <code>New-Item -ItemType Directory -Force -Path "$env:USERPROFILE\\.mykeys"</code><br>
+                      <code>Invoke-WebRequest -Uri "https://mykeys.zip/mcp-server.js" -OutFile "$env:USERPROFILE\\.mykeys\\mcp-server.js"</code><br>
+                    • <strong>Windows (CMD):</strong><br>
+                      <code>mkdir "%USERPROFILE%\\.mykeys"</code><br>
+                      <code>curl -o "%USERPROFILE%\\.mykeys\\mcp-server.js" https://mykeys.zip/mcp-server.js</code><br>
+                    • <strong>macOS/Linux:</strong><br>
+                      <code>mkdir -p ~/.mykeys</code><br>
+                      <code>curl -o ~/.mykeys/mcp-server.js https://mykeys.zip/mcp-server.js</code><br>
+                    • The path above will be used in your config after download
+                `;
+            } else {
+                serverPathInput.removeAttribute('readonly');
+                serverPathInput.value = '';
+                serverPathInput.placeholder = 'Path to mcp-server.js (e.g., /path/to/mcp-server.js)';
+                serverPathHelp.innerHTML = `
+                    <strong>Local Examples:</strong><br>
+                    • Windows: <code>E:\\zip-myl-mykeys-api\\mcp-server.js</code> or <code>E:/zip-myl-mykeys-api/mcp-server.js</code><br>
+                    • macOS/Linux: <code>/usr/local/lib/mykeys/mcp-server.js</code> or <code>~/mykeys/mcp-server.js</code><br>
+                    • npm package: <code>node_modules/@mykeys/mcp-server/dist/index.js</code>
+                `;
+            }
+        }
+        
+        // Make updateServerPath available globally for debugging
+        window.updateServerPath = updateServerPath;
+        
+        // Attach event listener to serverSource dropdown
+        function setupServerPathListener() {
+            const serverSource = document.getElementById('serverSource');
+            const serverPathInput = document.getElementById('serverPath');
+            
+            if (!serverSource || !serverPathInput) {
+                console.error('Required elements not found for setupServerPathListener');
+                return;
+            }
+            
+            // Ensure hosted is selected by default
+            if (serverSource.value !== 'hosted') {
+                serverSource.value = 'hosted';
+            }
+            
+            // Attach change listener
+            serverSource.addEventListener('change', function() {
+                updateServerPath();
+            });
+            
+            // Initialize path based on current selection
+            updateServerPath();
+        }
+        
+        // Initialize on page load
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', () => {
+                setupServerPathListener();
+                updateWorkflowIndicator('token'); // Start with token tab
+            });
+        } else {
+            setupServerPathListener();
+            updateWorkflowIndicator('token'); // Start with token tab
+        }
+        
+        // Config Form
+        document.getElementById('configForm').addEventListener('submit', (e) => {
+            e.preventDefault();
+            
+            const token = document.getElementById('mcpToken').value;
+            const clientId = document.getElementById('clientId').value;
+            const clientType = document.getElementById('clientType').value;
+            const serverSource = document.getElementById('serverSource').value;
+            const serverPath = document.getElementById('serverPath').value.trim();
+            const mykeysUrl = document.getElementById('mykeysUrl').value;
+            
+            // Validate server path
+            if (!serverPath || serverPath.trim() === '') {
+                const alertMessage = 'Please provide a server path. If using "Download from mykeys.zip", the path should be set automatically.';
+                alert(alertMessage);
+                e.preventDefault();
+                return false;
+            }
+            
+            // Determine command based on file extension and path
+            const isTypeScript = serverPath.endsWith('.ts');
+            const isNpmPackage = serverPath.includes('node_modules') || serverPath.startsWith('@');
+            
+            let command, args;
+            
+            if (isNpmPackage) {
+                // If it's an npm package, use npx
+                command = "npx";
+                args = [serverPath];
+            } else if (isTypeScript) {
+                // TypeScript file needs tsx
+                command = "npx";
+                args = ["tsx", serverPath];
+            } else {
+                // JavaScript file uses node
+                command = "node";
+                args = [serverPath];
+            }
+            
+            const config = {
+                mcpServers: {
+                    "mykeys-zip": {
+                        command: command,
+                        args: args,
+                        env: {
+                            MYKEYS_URL: mykeysUrl,
+                            MCP_TOKEN: token,
+                            MCP_CLIENT_ID: clientId,
+                            MCP_CLIENT_TYPE: clientType,
+                            MCP_SYNC_ENABLED: "true"
+                        }
+                    }
+                }
+            };
+            
+            // Add download instructions if using hosted version
+            let configOutput = JSON.stringify(config, null, 2);
+            if (serverSource === 'hosted') {
+                const isWindows = navigator.platform.toLowerCase().includes('win');
+                let downloadInstructions;
+                if (isWindows) {
+                    downloadInstructions = `// First, download the MCP server (PowerShell):
+// New-Item -ItemType Directory -Force -Path "$env:USERPROFILE\\.mykeys"
+// Invoke-WebRequest -Uri "https://mykeys.zip/mcp-server.js" -OutFile "$env:USERPROFILE\\.mykeys\\mcp-server.js"
+//
+// Or using CMD:
+// mkdir "%USERPROFILE%\\.mykeys"
+// curl -o "%USERPROFILE%\\.mykeys\\mcp-server.js" https://mykeys.zip/mcp-server.js`;
+                } else {
+                    downloadInstructions = `// First, download the MCP server:
+// mkdir -p ~/.mykeys
+// curl -o ~/.mykeys/mcp-server.js https://mykeys.zip/mcp-server.js`;
+                }
+                configOutput = `${downloadInstructions}
+//
+// Then use this configuration:
+
+${configOutput}`;
+            }
+            
+            generatedConfig = configOutput;
+            document.getElementById('configOutput').textContent = generatedConfig;
+            document.getElementById('configResult').classList.add('show');
+        });
+        
+        function copyToken() {
+            if (generatedToken) {
+                navigator.clipboard.writeText(generatedToken).then(() => {
+                    const btn = event.target;
+                    const originalText = btn.textContent;
+                    btn.textContent = '✓ Copied!';
+                    btn.style.background = '#28a745';
+                    setTimeout(() => {
+                        btn.textContent = originalText;
+                        btn.style.background = '';
+                    }, 2000);
+                });
+            }
+        }
+        
+        function copyConfig() {
+            if (generatedConfig) {
+                navigator.clipboard.writeText(generatedConfig).then(() => {
+                    const btn = event.target;
+                    const originalText = btn.textContent;
+                    btn.textContent = '✓ Copied!';
+                    btn.style.background = '#28a745';
+                    setTimeout(() => {
+                        btn.textContent = originalText;
+                        btn.style.background = '';
+                    }, 2000);
+                });
+            }
+        }
+    </script>
+</body>
+</html>
+

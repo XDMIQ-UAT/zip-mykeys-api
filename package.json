@@ -1,0 +1,67 @@
+{
+  "name": "mykeys-api",
+  "version": "2.0.0",
+  "description": "MyKeys API - Secure secrets management system with GCP Secret Manager integration",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "mcp": "tsx mcp-server.ts",
+    "mcp:dev": "tsx watch mcp-server.ts",
+    "dev": "nodemon server.js",
+    "dev:marketing": "cd marketing-site && npm run dev",
+    "build:marketing": "cd marketing-site && npm install && npm run build",
+    "build:mcp": "npm run bundle:mcp && npm run copy:mcp",
+    "bundle:mcp": "npx esbuild mcp-server.ts --bundle --platform=node --target=node18 --format=cjs --outfile=dist/mcp-server-bundled.js",
+    "copy:mcp": "node -e \"const fs=require('fs'); if(fs.existsSync('dist/mcp-server-bundled.js')) fs.copyFileSync('dist/mcp-server-bundled.js', 'public/mcp-server.js'); else if(fs.existsSync('dist/mcp-server.js')) fs.copyFileSync('dist/mcp-server.js', 'public/mcp-server.js');\"",
+    "build": "npm run build:marketing && npm run build:mcp",
+    "test": "playwright test",
+    "test:ui": "playwright test --ui",
+    "test:debug": "playwright test --debug",
+    "test:headed": "playwright test --headed",
+    "test:report": "playwright show-report",
+    "cli": "node mykeys-cli.js",
+    "deploy": "gcloud run deploy mykeys-api --source . --region us-central1 --allow-unauthenticated",
+    "deploy:vercel": "powershell -ExecutionPolicy Bypass -File scripts/deploy-vercel.ps1",
+    "deploy:vercel:prod": "powershell -ExecutionPolicy Bypass -File scripts/deploy-vercel.ps1 -Prod"
+  },
+  "bin": {
+    "mykeys": "./mykeys-cli.js"
+  },
+  "keywords": [
+    "secrets",
+    "security",
+    "gcp",
+    "tld",
+    "encryption",
+    "secret-manager"
+  ],
+  "author": "MyL.zip Team",
+  "license": "MIT",
+  "dependencies": {
+    "@aws-sdk/client-ses": "^3.940.0",
+    "@google-cloud/secret-manager": "^5.0.0",
+    "@modelcontextprotocol/sdk": "^1.0.0",
+    "@upstash/redis": "^1.35.7",
+    "@vercel/kv": "^3.0.0",
+    "@vercel/postgres": "^0.10.0",
+    "axios": "^1.5.0",
+    "cors": "^2.8.5",
+    "dotenv": "^16.3.1",
+    "express": "^4.18.2",
+    "express-rate-limit": "^7.1.5",
+    "helmet": "^7.1.0",
+    "morgan": "^1.10.0",
+    "nodemailer": "^6.9.7"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.57.0",
+    "@types/node": "^20.19.25",
+    "esbuild": "^0.27.0",
+    "nodemon": "^3.0.2",
+    "tsx": "^4.20.6",
+    "typescript": "^5.9.3"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

@@ -1,0 +1,812 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
+    <title>Generate MCP Token - MyKeys.zip</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+        
+        .container {
+            background: white;
+            border-radius: 16px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            max-width: 600px;
+            width: 100%;
+            padding: 40px;
+        }
+        
+        h1 {
+            color: #333;
+            margin-bottom: 10px;
+            font-size: 28px;
+        }
+        
+        .subtitle {
+            color: #666;
+            margin-bottom: 30px;
+            font-size: 14px;
+        }
+        
+        .form-group {
+            margin-bottom: 20px;
+        }
+        
+        label {
+            display: block;
+            margin-bottom: 8px;
+            color: #333;
+            font-weight: 500;
+            font-size: 14px;
+        }
+        
+        input, select {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            font-size: 14px;
+            transition: border-color 0.3s;
+        }
+        
+        input:focus, select:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+        
+        button {
+            width: 100%;
+            padding: 14px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+        
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(102, 126, 234, 0.4);
+        }
+        
+        button:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+        
+        .token-result {
+            margin-top: 30px;
+            padding: 20px;
+            background: #f5f5f5;
+            border-radius: 8px;
+            display: none;
+        }
+        
+        .token-result.show {
+            display: block;
+        }
+        
+        .token-result.success {
+            background: #d4edda;
+            border: 2px solid #28a745;
+        }
+        
+        .token-result.error {
+            background: #f8d7da;
+            border: 2px solid #dc3545;
+        }
+        
+        .token-value {
+            font-family: 'Courier New', monospace;
+            background: white;
+            padding: 12px;
+            border-radius: 4px;
+            word-break: break-all;
+            margin: 10px 0;
+            font-size: 12px;
+            border: 1px solid #ddd;
+        }
+        
+        .copy-btn {
+            margin-top: 10px;
+            padding: 8px 16px;
+            background: #667eea;
+            font-size: 14px;
+        }
+        
+        .info-box {
+            background: #e7f3ff;
+            border-left: 4px solid #2196F3;
+            padding: 15px;
+            margin-bottom: 20px;
+            border-radius: 4px;
+        }
+        
+        .info-box p {
+            margin: 5px 0;
+            font-size: 13px;
+            color: #1976D2;
+        }
+        
+        .loading {
+            display: none;
+            text-align: center;
+            margin-top: 20px;
+        }
+        
+        .loading.show {
+            display: block;
+        }
+        
+        .spinner {
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #667eea;
+            border-radius: 50%;
+            width: 30px;
+            height: 30px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        .toggle-btn {
+            width: 100%;
+            padding: 10px;
+            background: #f5f5f5;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            font-size: 14px;
+            cursor: pointer;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            transition: all 0.3s;
+        }
+        
+        .toggle-btn:hover {
+            background: #eeeeee;
+            border-color: #667eea;
+        }
+        
+        #toggleIcon {
+            transition: transform 0.3s;
+        }
+        
+        #advancedOptions {
+            animation: slideDown 0.3s ease-out;
+        }
+        
+        @keyframes slideDown {
+            from {
+                opacity: 0;
+                transform: translateY(-10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+        
+        /* Step Indicator Styles */
+        .step-indicator {
+            background: #f8f9fa;
+            border-radius: 8px;
+            padding: 16px 20px;
+            margin-bottom: 24px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 12px;
+        }
+        
+        .step-info {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+        
+        .step-badge {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 6px 12px;
+            border-radius: 20px;
+            font-size: 13px;
+            font-weight: 600;
+        }
+        
+        .step-text {
+            color: #666;
+            font-size: 14px;
+        }
+        
+        .step-nav {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+        }
+        
+        .step-link {
+            color: #667eea;
+            text-decoration: none;
+            font-size: 13px;
+            padding: 6px 12px;
+            border-radius: 6px;
+            transition: background 0.2s;
+        }
+        
+        .step-link:hover {
+            background: #f0f0f0;
+            text-decoration: underline;
+        }
+        
+        .step-progress {
+            width: 100%;
+            height: 4px;
+            background: #e0e0e0;
+            border-radius: 2px;
+            margin-top: 12px;
+            overflow: hidden;
+        }
+        
+        .step-progress-bar {
+            height: 100%;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            transition: width 0.3s ease;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔑 Generate MCP Token</h1>
+        <p class="subtitle">Create a secure token for Cursor, Warp, or other MCP clients</p>
+        
+        <!-- Step Indicator -->
+        <div class="step-indicator" id="stepIndicator">
+            <div class="step-info">
+                <span class="step-badge" id="stepBadge">Step 1 of 2</span>
+                <span class="step-text" id="stepDescription">Request Verification Code</span>
+            </div>
+            <div class="step-nav" id="stepNav" style="display: none;">
+                <a href="#" class="step-link" onclick="goToStep(1); return false;">← Back</a>
+            </div>
+            <div class="step-progress">
+                <div class="step-progress-bar" id="stepProgressBar" style="width: 50%;"></div>
+            </div>
+        </div>
+        
+        <div class="info-box">
+            <p><strong>How it works:</strong></p>
+            <p>1. Enter your email address</p>
+            <p>2. Receive a verification code via email</p>
+            <p>3. Enter the code and Client ID to generate your token</p>
+            <p>4. Copy the token for MCP configuration</p>
+        </div>
+        
+        <!-- Step 1: Request MFA Code -->
+        <div id="step1">
+            <form id="mfaRequestForm">
+                <div class="form-group">
+                    <label for="email">Email Address</label>
+                    <input type="email" id="email" name="email" placeholder="your.email@example.com" required>
+                    <small style="color: #666; font-size: 12px; display: block; margin-top: 4px;">
+                        Enter your email to receive a verification code
+                    </small>
+                </div>
+                
+                <button type="submit" id="requestCodeBtn">Send Verification Code</button>
+            </form>
+        </div>
+        
+        <!-- Step 2: Verify MFA Code and Generate Token (sync with CLI) -->
+        <div id="step2" style="display: none;">
+            <div class="info-box" style="background: #d4edda; border-left-color: #28a745;">
+                <p><strong>✓ Verification code sent!</strong></p>
+                <p id="codeSentMessage">Check your <span id="codeMethod">email</span> for the 4-digit code.</p>
+            </div>
+            
+            <form id="mfaVerifyForm">
+                <div class="form-group">
+                    <label for="mfaCode">Verification Code</label>
+                    <input type="text" id="mfaCode" name="mfaCode" placeholder="1234" maxlength="4" pattern="[0-9]{4}" required>
+                    <small style="color: #666; font-size: 12px; display: block; margin-top: 4px;">
+                        Enter the 4-digit code sent to you
+                    </small>
+                </div>
+                
+                <div class="form-group">
+                    <label for="clientId">Client ID</label>
+                    <input type="text" id="clientId" name="clientId" placeholder="e.g., my-agent, cursor-dev" required>
+                    <small style="color: #666; font-size: 12px; display: block; margin-top: 4px;">
+                        A unique identifier for this token (required)
+                    </small>
+                </div>
+                
+                <!-- Advanced Options (collapsed by default) -->
+                <div class="form-group">
+                    <button type="button" id="toggleAdvanced" class="toggle-btn" style="cursor: pointer;">
+                        <span id="toggleText">Show Advanced Options</span>
+                        <span id="toggleIcon">▼</span>
+                    </button>
+                </div>
+                
+                <div id="advancedOptions" style="display: none;">
+                    <div class="form-group">
+                        <label for="clientType">Client Type <span style="color: #999; font-weight: normal;">(optional)</span></label>
+                        <select id="clientType" name="clientType">
+                            <option value="generic">Generic</option>
+                            <option value="cursor">Cursor</option>
+                            <option value="warp">Warp</option>
+                            <option value="other">Other</option>
+                        </select>
+                        <small style="color: #666; font-size: 12px; display: block; margin-top: 4px;">
+                            Used for organization only (defaults to "generic")
+                        </small>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="expiresInDays">Expires In (days) <span style="color: #999; font-weight: normal;">(optional)</span></label>
+                        <input type="number" id="expiresInDays" name="expiresInDays" value="90" min="1" max="365">
+                        <small style="color: #666; font-size: 12px; display: block; margin-top: 4px;">
+                            Default: 90 days
+                        </small>
+                    </div>
+                </div>
+                
+                <!-- Terms acknowledgment -->
+                <div class="form-group">
+                    <label style="display: flex; align-items: start; gap: 8px; cursor: pointer;">
+                        <input type="checkbox" id="ecosystemAcknowledged" name="ecosystemAcknowledged" required style="margin-top: 4px;">
+                        <span style="font-size: 13px;">
+                            I have read and acknowledge the <a href="https://xdmiq.com" target="_blank" rel="noopener noreferrer">xdmiq.com</a>, 
+                            <a href="https://cosmiciq.org" target="_blank" rel="noopener noreferrer">cosmiciq.org</a>, 
+                            <a href="https://mykeys.zip" target="_blank" rel="noopener noreferrer">mykeys.zip</a>, 
+                            <a href="https://myl.zip" target="_blank" rel="noopener noreferrer">myl.zip</a>, 
+                            and all other owned products ecosystem, including Terms of Service and Privacy Policy.
+                        </span>
+                    </label>
+                </div>
+                
+                <button type="submit" id="verifyCodeBtn">Verify Code & Generate Token</button>
+                <button type="button" id="resendCodeBtn" style="margin-top: 10px; background: #6c757d;" onclick="resendCode()">Resend Code</button>
+            </form>
+        </div>
+        
+        
+        <div class="loading" id="loading">
+            <div class="spinner"></div>
+            <p style="margin-top: 10px;">Generating token...</p>
+        </div>
+        
+        <div class="token-result" id="tokenResult">
+            <h3 id="resultTitle"></h3>
+            <p id="resultMessage"></p>
+            <div id="tokenDisplay"></div>
+            <button class="copy-btn" id="copyBtn" onclick="copyToken()">Copy Token</button>
+        </div>
+    </div>
+    
+    <script>
+        const mfaRequestForm = document.getElementById('mfaRequestForm');
+        const mfaVerifyForm = document.getElementById('mfaVerifyForm');
+        const loading = document.getElementById('loading');
+        const tokenResult = document.getElementById('tokenResult');
+        const resultTitle = document.getElementById('resultTitle');
+        const resultMessage = document.getElementById('resultMessage');
+        const tokenDisplay = document.getElementById('tokenDisplay');
+        const requestCodeBtn = document.getElementById('requestCodeBtn');
+        const verifyCodeBtn = document.getElementById('verifyCodeBtn');
+        let generatedToken = '';
+        let verifiedEmail = '';
+        let verifiedPhone = '';
+        let verifiedCode = '';
+        
+        // Storage keys
+        const STORAGE_KEY_EMAIL = 'mcp_token_email';
+        const STORAGE_KEY_PHONE = 'mcp_token_phone';
+        const STORAGE_KEY_VERIFIED = 'mcp_token_verified';
+        
+        // Check for stored verification on page load
+        function restoreVerificationState() {
+            try {
+                const storedEmail = localStorage.getItem(STORAGE_KEY_EMAIL);
+                const storedPhone = localStorage.getItem(STORAGE_KEY_PHONE);
+                const storedVerified = localStorage.getItem(STORAGE_KEY_VERIFIED);
+                
+                // Note: We don't restore verification state since code is single-use
+                // User needs to request a new code
+            } catch (error) {
+                console.error('Error restoring verification state:', error);
+                clearVerificationStorage();
+            }
+            
+            // Ensure proper initial state
+            const step1 = document.getElementById('step1');
+            const step2 = document.getElementById('step2');
+            const tokenResult = document.getElementById('tokenResult');
+            
+            if (step1 && step2) {
+                step1.style.display = 'block';
+                step2.style.display = 'none';
+                updateStepIndicator(1, 2, 'Request Verification Code');
+            }
+            
+            // Clear any error messages on initial load
+            if (tokenResult) {
+                tokenResult.classList.remove('show', 'error', 'success');
+            }
+            
+            return false;
+        }
+        
+        // Store verification state
+        function storeVerificationState() {
+            try {
+                if (verifiedEmail) localStorage.setItem(STORAGE_KEY_EMAIL, verifiedEmail);
+                if (verifiedPhone) localStorage.setItem(STORAGE_KEY_PHONE, verifiedPhone);
+                if (verifiedEmail || verifiedPhone) localStorage.setItem(STORAGE_KEY_VERIFIED, 'true');
+            } catch (error) {
+                console.error('Error storing verification state:', error);
+            }
+        }
+        
+        // Clear verification storage
+        function clearVerificationStorage() {
+            try {
+                localStorage.removeItem(STORAGE_KEY_EMAIL);
+                localStorage.removeItem(STORAGE_KEY_PHONE);
+                localStorage.removeItem(STORAGE_KEY_VERIFIED);
+            } catch (error) {
+                console.error('Error clearing verification storage:', error);
+            }
+        }
+        
+        // Restore state on page load
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', () => {
+                restoreVerificationState();
+            });
+        } else {
+            restoreVerificationState();
+        }
+        
+        function toggleAdvanced(e) {
+            // Prevent default and stop propagation to avoid double-firing
+            if (e) {
+                e.preventDefault();
+                e.stopPropagation();
+            }
+            
+            const advanced = document.getElementById('advancedOptions');
+            const toggleIcon = document.getElementById('toggleIcon');
+            const toggleText = document.getElementById('toggleText');
+            
+            if (!advanced) {
+                console.error('advancedOptions element not found');
+                return;
+            }
+            
+            // Check both inline style and computed style
+            const currentDisplay = advanced.style.display;
+            const computedDisplay = window.getComputedStyle(advanced).display;
+            const isHidden = currentDisplay === 'none' || computedDisplay === 'none';
+            
+            if (isHidden) {
+                advanced.style.display = 'block';
+                if (toggleIcon) toggleIcon.textContent = '▲';
+                if (toggleText) toggleText.textContent = 'Hide Advanced Options';
+            } else {
+                advanced.style.display = 'none';
+                if (toggleIcon) toggleIcon.textContent = '▼';
+                if (toggleText) toggleText.textContent = 'Show Advanced Options';
+            }
+        }
+        
+        // Set up toggle button with multiple strategies for maximum compatibility
+        function setupToggleButton() {
+            const toggleBtn = document.getElementById('toggleAdvanced');
+            if (!toggleBtn) {
+                console.warn('Toggle button not found');
+                return;
+            }
+            
+            // Remove any existing listeners by cloning
+            const newBtn = toggleBtn.cloneNode(true);
+            toggleBtn.parentNode.replaceChild(newBtn, toggleBtn);
+            
+            // Strategy 1: Direct event listener on button
+            newBtn.addEventListener('click', function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+                toggleAdvanced(e);
+            }, { capture: false });
+            
+            // Strategy 2: Also handle clicks on child elements (spans)
+            const toggleText = document.getElementById('toggleText');
+            const toggleIcon = document.getElementById('toggleIcon');
+            
+            if (toggleText) {
+                toggleText.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    toggleAdvanced(e);
+                });
+            }
+            
+            if (toggleIcon) {
+                toggleIcon.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    toggleAdvanced(e);
+                });
+            }
+            
+            // Strategy 3: Make button and children pointer-events work correctly
+            newBtn.style.cursor = 'pointer';
+            newBtn.style.pointerEvents = 'auto';
+            if (toggleText) toggleText.style.pointerEvents = 'auto';
+            if (toggleIcon) toggleIcon.style.pointerEvents = 'auto';
+            
+            console.log('Toggle button event listeners attached');
+        }
+        
+        // Set up when DOM is ready
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', setupToggleButton);
+        } else {
+            setupToggleButton();
+        }
+        
+        // Also set up when step2 becomes visible (in case button is added dynamically)
+        const observer = new MutationObserver((mutations) => {
+            mutations.forEach((mutation) => {
+                if (mutation.type === 'attributes' && mutation.attributeName === 'style') {
+                    const step2 = document.getElementById('step2');
+                    if (step2 && step2.style.display !== 'none') {
+                        // Small delay to ensure button is rendered
+                        setTimeout(setupToggleButton, 100);
+                    }
+                }
+            });
+        });
+        
+        const step2 = document.getElementById('step2');
+        if (step2) {
+            observer.observe(step2, { attributes: true, attributeFilter: ['style'] });
+        }
+        
+        // Also make it available globally for backwards compatibility
+        window.toggleAdvanced = toggleAdvanced;
+        
+        // Step navigation functions
+        function updateStepIndicator(stepNumber, totalSteps, description) {
+            const stepBadge = document.getElementById('stepBadge');
+            const stepDescription = document.getElementById('stepDescription');
+            const stepNav = document.getElementById('stepNav');
+            const stepProgressBar = document.getElementById('stepProgressBar');
+            
+            if (stepBadge) {
+                stepBadge.textContent = `Step ${stepNumber} of ${totalSteps}`;
+            }
+            if (stepDescription) {
+                stepDescription.textContent = description;
+            }
+            if (stepNav) {
+                stepNav.style.display = stepNumber > 1 ? 'flex' : 'none';
+            }
+            if (stepProgressBar) {
+                const progress = (stepNumber / totalSteps) * 100;
+                stepProgressBar.style.width = `${progress}%`;
+            }
+        }
+        
+        function goToStep(stepNumber) {
+            if (stepNumber === 1) {
+                goBackToStep1();
+            }
+        }
+        
+        function goBackToStep1() {
+            document.getElementById('step1').style.display = 'block';
+            document.getElementById('step2').style.display = 'none';
+            tokenResult.classList.remove('show');
+            verifiedEmail = '';
+            verifiedPhone = '';
+            verifiedCode = '';
+            clearVerificationStorage();
+            updateStepIndicator(1, 2, 'Request Verification Code');
+        }
+        
+        // Step 1: Request MFA code
+        mfaRequestForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const email = document.getElementById('email').value.trim();
+            
+            if (!email) {
+                alert('Please enter your email address.');
+                return;
+            }
+            
+            requestCodeBtn.disabled = true;
+            loading.classList.add('show');
+            
+            try {
+                const response = await fetch('/api/auth/request-mfa-code', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ email }),
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok && data.success) {
+                    // Store email for verification
+                    verifiedEmail = email;
+                    verifiedPhone = '';
+                    
+                    // Hide step 1, show step 2
+                    document.getElementById('step1').style.display = 'none';
+                    document.getElementById('step2').style.display = 'block';
+                    
+                    // Update step indicator
+                    updateStepIndicator(2, 2, 'Verify Code & Generate Token');
+                    
+                    // Update message
+                    document.getElementById('codeMethod').textContent = 'email';
+                    document.getElementById('codeSentMessage').innerHTML = `Check your <strong>email</strong> for the 4-digit code sent to ${email}.`;
+                    
+                    // Clear any previous errors
+                    tokenResult.classList.remove('show', 'error', 'success');
+                } else {
+                    throw new Error(data.error || data.message || 'Failed to send verification code');
+                }
+            } catch (error) {
+                tokenResult.classList.remove('success');
+                tokenResult.classList.add('error');
+                resultTitle.textContent = '❌ Failed to Send Code';
+                resultMessage.textContent = error.message || 'Failed to send verification code. Please try again.';
+                tokenDisplay.innerHTML = '';
+                tokenResult.classList.add('show');
+            } finally {
+                loading.classList.remove('show');
+                requestCodeBtn.disabled = false;
+            }
+        });
+        
+        // Step 2: Verify MFA code and generate token (sync with CLI)
+        mfaVerifyForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const mfaCode = document.getElementById('mfaCode').value.trim();
+            const clientId = document.getElementById('clientId').value.trim();
+            const clientType = document.getElementById('clientType').value || 'generic';
+            const expiresInDaysInput = document.getElementById('expiresInDays');
+            const expiresInDays = expiresInDaysInput.value ? parseInt(expiresInDaysInput.value) : 90;
+            const ecosystemAcknowledged = document.getElementById('ecosystemAcknowledged').checked;
+            
+            if (!mfaCode || mfaCode.length !== 4) {
+                alert('Please enter the 4-digit verification code.');
+                return;
+            }
+            
+            if (!clientId) {
+                alert('Client ID is required.');
+                return;
+            }
+            
+            if (!ecosystemAcknowledged) {
+                alert('Please acknowledge the ecosystem terms and conditions.');
+                return;
+            }
+            
+            verifyCodeBtn.disabled = true;
+            loading.classList.add('show');
+            
+            try {
+                // Verify code and generate token in one call (sync with CLI)
+                const response = await fetch('/api/auth/verify-mfa-code', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        email: verifiedEmail,
+                        code: mfaCode,
+                        clientId: clientId,
+                        clientType: clientType,
+                        expiresInDays: expiresInDays,
+                    }),
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok && data.success && data.token) {
+                    // Token generated immediately (CLI/web sync)
+                    generatedToken = data.token;
+                    
+                    // Show token result
+                    tokenResult.classList.remove('error');
+                    tokenResult.classList.add('success');
+                    resultTitle.textContent = '✅ Token Generated Successfully!';
+                    resultMessage.innerHTML = `
+                        <strong>Important:</strong> Save this token now - it will not be shown again!<br>
+                        Expires: ${data.expiresAt ? new Date(data.expiresAt).toLocaleDateString() : 'N/A'}
+                    `;
+                    tokenDisplay.innerHTML = `
+                        <div class="token-value">${data.token}</div>
+                    `;
+                    tokenResult.classList.add('show');
+                    
+                    // Hide step 2
+                    document.getElementById('step2').style.display = 'none';
+                    updateStepIndicator(2, 2, 'Token Generated');
+                } else {
+                    throw new Error(data.error || data.message || 'Failed to generate token');
+                }
+            } catch (error) {
+                tokenResult.classList.remove('success');
+                tokenResult.classList.add('error');
+                resultTitle.textContent = '❌ Verification Failed';
+                resultMessage.textContent = error.message || 'The verification code is incorrect or token generation failed. Please try again.';
+                tokenDisplay.innerHTML = '';
+                tokenResult.classList.add('show');
+            } finally {
+                loading.classList.remove('show');
+                verifyCodeBtn.disabled = false;
+            }
+        });
+        
+        // Resend code function
+        function resendCode() {
+            if (verifiedEmail) {
+                mfaRequestForm.dispatchEvent(new Event('submit'));
+            }
+        }
+        
+        
+        function copyToken() {
+            if (generatedToken) {
+                navigator.clipboard.writeText(generatedToken).then(() => {
+                    const btn = document.getElementById('copyBtn');
+                    const originalText = btn.textContent;
+                    btn.textContent = '✓ Copied!';
+                    btn.style.background = '#28a745';
+                    setTimeout(() => {
+                        btn.textContent = originalText;
+                        btn.style.background = '';
+                    }, 2000);
+                });
+            }
+        }
+    </script>
+</body>
+</html>
+

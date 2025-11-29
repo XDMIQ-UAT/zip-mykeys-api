@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Workspace Recovery - mykeys.zip</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+        
+        .container {
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            max-width: 600px;
+            width: 100%;
+            padding: 40px;
+            text-align: center;
+        }
+        
+        h1 {
+            color: #333;
+            margin-bottom: 10px;
+            font-size: 2em;
+        }
+        
+        .subtitle {
+            color: #666;
+            margin-bottom: 30px;
+            font-size: 1.1em;
+        }
+        
+        .status {
+            padding: 15px;
+            border-radius: 10px;
+            margin: 20px 0;
+            font-weight: 500;
+        }
+        
+        .status.info {
+            background: #e3f2fd;
+            color: #1976d2;
+        }
+        
+        .status.success {
+            background: #e8f5e9;
+            color: #388e3c;
+        }
+        
+        .status.error {
+            background: #ffebee;
+            color: #c62828;
+        }
+        
+        .button {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 15px 40px;
+            font-size: 1.1em;
+            border-radius: 10px;
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s;
+            font-weight: 600;
+            margin: 10px;
+            display: inline-block;
+            text-decoration: none;
+        }
+        
+        .button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(102, 126, 234, 0.4);
+        }
+        
+        .button:active {
+            transform: translateY(0);
+        }
+        
+        .button.secondary {
+            background: #f5f5f5;
+            color: #333;
+        }
+        
+        .button.secondary:hover {
+            background: #e0e0e0;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+        }
+        
+        .steps {
+            text-align: left;
+            margin: 30px 0;
+            padding: 20px;
+            background: #f9f9f9;
+            border-radius: 10px;
+        }
+        
+        .steps ol {
+            margin-left: 20px;
+        }
+        
+        .steps li {
+            margin: 10px 0;
+            color: #555;
+        }
+        
+        .code-block {
+            background: #282c34;
+            color: #abb2bf;
+            padding: 15px;
+            border-radius: 8px;
+            font-family: 'Courier New', monospace;
+            font-size: 0.9em;
+            margin: 15px 0;
+            text-align: left;
+            overflow-x: auto;
+        }
+        
+        .warning {
+            background: #fff3cd;
+            border-left: 4px solid #ffc107;
+            padding: 15px;
+            margin: 20px 0;
+            text-align: left;
+            border-radius: 5px;
+        }
+        
+        .warning strong {
+            color: #856404;
+        }
+        
+        .loading {
+            display: none;
+            margin: 20px 0;
+        }
+        
+        .spinner {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #667eea;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        .footer {
+            margin-top: 30px;
+            padding-top: 20px;
+            border-top: 1px solid #eee;
+            color: #999;
+            font-size: 0.9em;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🚀 Workspace Recovery</h1>
+        <p class="subtitle">Rebuild your warp-cursor workspace in minutes</p>
+        
+        <div id="status" class="status info" style="display: none;"></div>
+        
+        <div class="warning">
+            <strong>⚠️ Security Notice:</strong> This will register this device with mykeys.zip using 2FA. 
+            You'll receive a code via SMS or Email to complete the setup.
+        </div>
+        
+        <div class="steps">
+            <h3>What happens next:</h3>
+            <ol>
+                <li>Downloads and runs the recovery script</li>
+                <li>Fingerprints this device</li>
+                <li>Sends 2FA code to your registered phone/email</li>
+                <li>Registers device and stores credentials</li>
+                <li>Sets up your workspace automatically</li>
+            </ol>
+        </div>
+        
+        <button id="startBtn" class="button" onclick="startRecovery()">
+            Start Recovery Process
+        </button>
+        
+        <a href="/winget-restore.ps1" class="button secondary" download>
+            Download Script Manually
+        </a>
+        
+        <div id="loading" class="loading">
+            <div class="spinner"></div>
+            <p style="margin-top: 15px; color: #666;">Setting up your workspace...</p>
+        </div>
+        
+        <div class="footer">
+            <p>Powered by <strong>mykeys.zip</strong></p>
+            <p style="margin-top: 5px;">Secure • Automated • Fast</p>
+        </div>
+    </div>
+    
+    <script>
+        function showStatus(message, type) {
+            const statusDiv = document.getElementById('status');
+            statusDiv.textContent = message;
+            statusDiv.className = 'status ' + type;
+            statusDiv.style.display = 'block';
+        }
+        
+        function startRecovery() {
+            const startBtn = document.getElementById('startBtn');
+            const loading = document.getElementById('loading');
+            
+            startBtn.style.display = 'none';
+            loading.style.display = 'block';
+            showStatus('Preparing recovery script...', 'info');
+            
+            // Check if PowerShell is available
+            if (navigator.platform.indexOf('Win') === -1) {
+                showStatus('❌ This recovery tool is for Windows only. Please run on a Windows machine.', 'error');
+                loading.style.display = 'none';
+                startBtn.style.display = 'inline-block';
+                return;
+            }
+            
+            // Create PowerShell command
+            const scriptUrl = window.location.origin + '/winget-restore.ps1';
+            const command = `powershell.exe -ExecutionPolicy Bypass -Command "& {Invoke-WebRequest -Uri '${scriptUrl}' -OutFile '$env:TEMP\\winget-restore.ps1'; & '$env:TEMP\\winget-restore.ps1'}"`;
+            
+            // Try to execute via PowerShell
+            showStatus('Downloading recovery script...', 'info');
+            
+            // For security, we'll provide instructions instead of auto-executing
+            showStatus('✅ Script ready! Click the download button and run it in PowerShell as Administrator.', 'success');
+            
+            // Create download link
+            const downloadLink = document.createElement('a');
+            downloadLink.href = scriptUrl;
+            downloadLink.download = 'winget-restore.ps1';
+            downloadLink.click();
+            
+            loading.style.display = 'none';
+            
+            // Show instructions
+            setTimeout(() => {
+                showStatus('📋 Instructions:\n1. Open PowerShell as Administrator\n2. Navigate to Downloads: cd $env:USERPROFILE\\Downloads\n3. Run: .\\winget-restore.ps1\n4. Follow the prompts', 'info');
+            }, 1000);
+        }
+        
+        // Auto-detect if running in Brave/Chrome
+        if (navigator.userAgent.indexOf('Chrome') !== -1) {
+            console.log('✅ Browser detected: Chrome/Brave');
+        }
+    </script>
+</body>
+</html>
+
+
+
+
