@@ -377,54 +377,78 @@
         <!-- Configuration Tab -->
         <div id="config-tab" class="tab-content">
             <div class="info-box">
-                <p><strong>Generate Token:</strong> Create a secure token for MCP authentication</p>
+                <p><strong>Generate Token:</strong> Create a secure token for MCP authentication using email verification</p>
             </div>
             
-            <form id="tokenForm">
-                <div class="form-group">
-                    <label for="username">Admin Username</label>
-                    <input type="text" id="username" name="username" value="admin" required>
+            <!-- Step 1: Request MFA Code -->
+            <div id="tokenStep1">
+                <form id="tokenMfaRequestForm">
+                    <div class="form-group">
+                        <label for="tokenEmail">Email Address</label>
+                        <input type="email" id="tokenEmail" name="tokenEmail" placeholder="your.email@example.com" required>
+                        <small style="color: #666; font-size: 12px; display: block; margin-top: 4px;">
+                            Enter your email to receive a verification code
+                        </small>
+                    </div>
+                    <button type="submit">Send Verification Code</button>
+                </form>
+            </div>
+            
+            <!-- Step 2: Verify Code & Generate Token -->
+            <div id="tokenStep2" style="display: none;">
+                <div class="info-box" style="background: #d4edda; border-left-color: #28a745;">
+                    <p><strong>✓ Verification code sent!</strong></p>
+                    <p id="tokenCodeSentMessage">Check your <strong>email</strong> for the 4-digit code.</p>
                 </div>
                 
-                <div class="form-group">
-                    <label for="password">Admin Password</label>
-                    <input type="password" id="password" name="password" required>
-                </div>
-                
-                <div class="form-group">
-                    <label for="tokenClientId">Client ID</label>
-                    <input type="text" id="tokenClientId" name="tokenClientId" placeholder="e.g., cursor-agent" required>
-                </div>
-                
-                <div class="form-group">
-                    <label for="tokenClientType">Client Type</label>
-                    <select id="tokenClientType" name="tokenClientType" required>
-                        <option value="cursor">Cursor</option>
-                        <option value="warp">Warp</option>
-                        <option value="other">Other</option>
-                    </select>
-                </div>
-                
-                <div class="form-group">
-                    <label for="expiresInDays">Expires In (days)</label>
-                    <input type="number" id="expiresInDays" name="expiresInDays" value="90" min="1" max="365" required>
-                </div>
-                
-                <div class="form-group">
-                    <label style="display: flex; align-items: start; gap: 8px; cursor: pointer;">
-                        <input type="checkbox" id="tokenEcosystemAcknowledged" name="tokenEcosystemAcknowledged" required style="margin-top: 4px;">
-                        <span style="font-size: 13px;">
-                            I have read and acknowledge the <a href="https://xdmiq.com" target="_blank" rel="noopener noreferrer">xdmiq.com</a>, 
-                            <a href="https://cosmiciq.org" target="_blank" rel="noopener noreferrer">cosmiciq.org</a>, 
-                            <a href="https://mykeys.zip" target="_blank" rel="noopener noreferrer">mykeys.zip</a>, 
-                            <a href="https://myl.zip" target="_blank" rel="noopener noreferrer">myl.zip</a>, 
-                            and all other owned products ecosystem, including Terms of Service and Privacy Policy.
-                        </span>
-                    </label>
-                </div>
-                
-                <button type="submit">Generate Token</button>
-            </form>
+                <form id="tokenForm">
+                    <div class="form-group">
+                        <label for="tokenMfaCode">Verification Code</label>
+                        <input type="text" id="tokenMfaCode" name="tokenMfaCode" placeholder="1234" maxlength="4" pattern="[0-9]{4}" required>
+                        <small style="color: #666; font-size: 12px; display: block; margin-top: 4px;">
+                            Enter the 4-digit code sent to you
+                        </small>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="tokenClientId">Client ID</label>
+                        <input type="text" id="tokenClientId" name="tokenClientId" placeholder="e.g., cursor-agent" required>
+                        <small style="color: #666; font-size: 12px; display: block; margin-top: 4px;">
+                            A unique identifier for this token (required)
+                        </small>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="tokenClientType">Client Type</label>
+                        <select id="tokenClientType" name="tokenClientType" required>
+                            <option value="cursor">Cursor</option>
+                            <option value="warp">Warp</option>
+                            <option value="other">Other</option>
+                        </select>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="expiresInDays">Expires In (days)</label>
+                        <input type="number" id="expiresInDays" name="expiresInDays" value="90" min="1" max="365" required>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label style="display: flex; align-items: start; gap: 8px; cursor: pointer;">
+                            <input type="checkbox" id="tokenEcosystemAcknowledged" name="tokenEcosystemAcknowledged" required style="margin-top: 4px;">
+                            <span style="font-size: 13px;">
+                                I have read and acknowledge the <a href="https://xdmiq.com" target="_blank" rel="noopener noreferrer">xdmiq.com</a>, 
+                                <a href="https://cosmiciq.org" target="_blank" rel="noopener noreferrer">cosmiciq.org</a>, 
+                                <a href="https://mykeys.zip" target="_blank" rel="noopener noreferrer">mykeys.zip</a>, 
+                                <a href="https://myl.zip" target="_blank" rel="noopener noreferrer">myl.zip</a>, 
+                                and all other owned products ecosystem, including Terms of Service and Privacy Policy.
+                            </span>
+                        </label>
+                    </div>
+                    
+                    <button type="submit">Verify Code & Generate Token</button>
+                    <button type="button" onclick="resendTokenCode()" style="margin-top: 10px; background: #6c757d;">Resend Code</button>
+                </form>
+            </div>
             
             <div class="result-box" id="tokenResult">
                 <h3 id="tokenResultTitle"></h3>
@@ -520,12 +544,53 @@
             updateWorkflowIndicator(tabName);
         }
         
-        // Token Form
+        let tokenVerifiedEmail = '';
+        
+        // Token MFA Request Form
+        document.getElementById('tokenMfaRequestForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const email = document.getElementById('tokenEmail').value.trim();
+            const resultBox = document.getElementById('tokenResult');
+            const resultTitle = document.getElementById('tokenResultTitle');
+            const resultMessage = document.getElementById('tokenResultMessage');
+            const tokenOutput = document.getElementById('tokenOutput');
+            
+            if (!email) {
+                alert('Please enter your email address.');
+                return;
+            }
+            
+            try {
+                const response = await fetch('/api/auth/request-mfa-code', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ email }),
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok && data.success) {
+                    tokenVerifiedEmail = email;
+                    document.getElementById('tokenStep1').style.display = 'none';
+                    document.getElementById('tokenStep2').style.display = 'block';
+                    document.getElementById('tokenCodeSentMessage').innerHTML = `Check your <strong>email</strong> for the 4-digit code sent to ${email}.`;
+                } else {
+                    throw new Error(data.error || data.message || 'Failed to send verification code');
+                }
+            } catch (error) {
+                resultTitle.textContent = '❌ Error';
+                resultMessage.textContent = error.message || 'Failed to send verification code';
+                tokenOutput.textContent = '';
+                resultBox.classList.add('show');
+            }
+        });
+        
+        // Token Form (Step 2: Verify & Generate)
         document.getElementById('tokenForm').addEventListener('submit', async (e) => {
             e.preventDefault();
             
-            const username = document.getElementById('username').value;
-            const password = document.getElementById('password').value;
+            const code = document.getElementById('tokenMfaCode').value.replace(/\D/g, '').slice(0, 4);
             const clientId = document.getElementById('tokenClientId').value;
             const clientType = document.getElementById('tokenClientType').value;
             const expiresInDays = parseInt(document.getElementById('expiresInDays').value);
@@ -542,15 +607,12 @@
             const tokenOutput = document.getElementById('tokenOutput');
             
             try {
-                const auth = btoa(`${username}:${password}`);
-                
-                const response = await fetch('/api/mcp/token/generate', {
+                const response = await fetch('/api/auth/verify-mfa-code', {
                     method: 'POST',
-                    headers: {
-                        'Authorization': `Basic ${auth}`,
-                        'Content-Type': 'application/json',
-                    },
+                    headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
+                        email: tokenVerifiedEmail,
+                        code,
                         clientId,
                         clientType,
                         expiresInDays,
@@ -559,11 +621,11 @@
                 
                 const data = await response.json();
                 
-                if (response.ok && data.success) {
+                if (response.ok && data.success && data.token) {
                     generatedToken = data.token;
                     
                     resultTitle.textContent = '✅ Token Generated Successfully!';
-                    resultMessage.innerHTML = `<strong>Important:</strong> Save this token now - it will not be shown again!<br>Expires: ${new Date(data.expiresAt).toLocaleDateString()}`;
+                    resultMessage.innerHTML = `<strong>Important:</strong> Save this token now - it will not be shown again!<br>Expires: ${new Date(data.expiresAt || new Date()).toLocaleDateString()}`;
                     tokenOutput.textContent = data.token;
                     resultBox.classList.add('show');
                     
@@ -583,11 +645,19 @@
                 }
             } catch (error) {
                 resultTitle.textContent = '❌ Error';
-                resultMessage.textContent = error.message || 'Failed to generate token. Check your credentials.';
+                resultMessage.textContent = error.message || 'Failed to generate token. Please check your verification code.';
                 tokenOutput.textContent = '';
                 resultBox.classList.add('show');
             }
         });
+        
+        function resendTokenCode() {
+            tokenVerifiedEmail = '';
+            document.getElementById('tokenStep1').style.display = 'block';
+            document.getElementById('tokenStep2').style.display = 'none';
+            document.getElementById('tokenEmail').value = '';
+            document.getElementById('tokenMfaCode').value = '';
+        }
         
         // Update server path based on source selection
         function updateServerPath() {
