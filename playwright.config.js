@@ -52,10 +52,18 @@ module.exports = defineConfig({
 
   /* Run your local dev server before starting the tests */
   webServer: {
-    command: 'npm run dev:marketing',
-    url: 'http://localhost:5173',
+    command: process.env.CI ? 'npm start' : 'npm run dev:marketing',
+    url: process.env.CI ? 'http://localhost:8080' : 'http://localhost:5173',
     reuseExistingServer: !process.env.CI,
     timeout: 120 * 1000,
+  },
+  
+  /* Global test timeout */
+  timeout: 30000,
+  
+  /* Expect timeout */
+  expect: {
+    timeout: 10000,
   },
 });
 
