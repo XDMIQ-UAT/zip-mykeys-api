@@ -57,24 +57,35 @@
         }
         
         /* Footer should be outside the main content area */
+        /* Footer should be outside main-content and container */
         body.has-shared-layout .footer {
             background: #1a1a1a;
             color: white;
             margin-top: auto;
-            padding: 60px 0 30px;
+            padding: 40px 0 20px;
             width: 100%;
+            flex-shrink: 0;
+        }
+        
+        body.has-shared-layout .footer .container {
+            background: transparent;
+            box-shadow: none;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 0 20px;
         }
         
         body.has-shared-layout .footer-content {
-            gap: 40px;
-            margin-bottom: 40px;
+            gap: 30px;
+            margin-bottom: 20px;
         }
         
         body.has-shared-layout .footer-bottom {
             border-top: 1px solid rgba(255, 255, 255, 0.1);
-            padding-top: 30px;
+            padding-top: 20px;
             text-align: center;
             color: rgba(255, 255, 255, 0.6);
+            font-size: 14px;
         }
         
         .container {

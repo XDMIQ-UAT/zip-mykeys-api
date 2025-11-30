@@ -237,22 +237,37 @@
             existingMain.classList.add('main-content');
         }
         
-        // Ensure footer placeholder is outside main-content
+        // Ensure footer placeholder is outside main-content and container
         const mainContentDiv = document.querySelector('.main-content');
-        if (mainContentDiv && footerPlaceholder && mainContentDiv.contains(footerPlaceholder)) {
-            // Move footer outside main-content
-            mainContentDiv.removeChild(footerPlaceholder);
-            document.body.appendChild(footerPlaceholder);
-        }
+        const containerDiv = document.querySelector('.container');
         
-        // Insert footer
         if (footerPlaceholder) {
+            // Check if footer is inside main-content or container
+            if (mainContentDiv && mainContentDiv.contains(footerPlaceholder)) {
+                mainContentDiv.removeChild(footerPlaceholder);
+                document.body.appendChild(footerPlaceholder);
+            } else if (containerDiv && containerDiv.contains(footerPlaceholder)) {
+                containerDiv.removeChild(footerPlaceholder);
+                document.body.appendChild(footerPlaceholder);
+            }
+            
+            // Insert footer
             footerPlaceholder.outerHTML = footerHTML;
         } else {
             // Insert before closing body tag
             const footerDiv = document.createElement('div');
             footerDiv.innerHTML = footerHTML;
             document.body.appendChild(footerDiv.firstElementChild);
+        }
+        
+        // Ensure footer is not inside any container
+        const insertedFooter = document.querySelector('.footer');
+        if (insertedFooter) {
+            const currentParent = insertedFooter.parentElement;
+            if (currentParent && (currentParent.classList.contains('main-content') || currentParent.classList.contains('container'))) {
+                currentParent.removeChild(insertedFooter);
+                document.body.appendChild(insertedFooter);
+            }
         }
     }
     
