@@ -4,30 +4,14 @@ const { SecretManagerServiceClient } = require('@google-cloud/secret-manager');
 // Support both standard KV vars and mykeys_ prefixed vars
 const { createClient } = require('@vercel/kv');
 
-// Create KV client with fallback to mykeys_ prefixed variables
-let kv = null;
-function getKV() {
-  if (!kv) {
-    const kvUrl = process.env.KV_REST_API_URL || process.env.mykeys_KV_REST_API_URL || process.env.UPSTASH_REDIS_REST_URL;
-    const kvToken = process.env.KV_REST_API_TOKEN || process.env.mykeys_KV_REST_API_TOKEN || process.env.UPSTASH_REDIS_REST_TOKEN;
-    
-    if (kvUrl && kvToken) {
-      kv = createClient({
-        url: kvUrl,
-        token: kvToken,
-      });
-    } else {
-      // Try default @vercel/kv (requires KV_REST_API_URL/TOKEN)
-      try {
-        const { kv: defaultKv } = require('@vercel/kv');
-        kv = defaultKv;
-      } catch (e) {
-        console.error('KV client not available - missing environment variables');
-      }
-    }
-  }
-  return kv;
-}
+// Import getKV from shared module to avoid circular dependencies
+const { getKV } = require('./kv-utils');
+
+// Load environment variables FIRST (before any modules that need them)
+// Priority: .env.local (local dev) > .env (shared defaults)
+require('dotenv').config({ path: '.env.local' }); // Load .env.local first (higher priority)
+require('dotenv').config(); // Then load .env as fallback
+
 const crypto = require('crypto');
 const path = require('path');
 const helmet = require('helmet');
@@ -37,6 +21,45 @@ const rateLimit = require('express-rate-limit');
 const { generateMCPToken, validateMCPToken, revokeMCPToken } = require('./token-auth');
 const { sendVerificationCode: sendSMSVerificationCode } = require('./sms-service');
 const { sendAuthCode: sendEmailAuthCode } = require('./email-service');
+// Import role-management AFTER getKV is exported
+const { getUserRoles, setUserRoles, getAllUserRoles, removeUserRoles, hasRole, hasAnyRole } = require('./role-management');
+const { 
+  createRing, 
+  getRing, 
+  getAllRings, 
+  updateRingRoles, 
+  addRingMember, 
+  removeRingMember, 
+  getRingForEmail,
+  initializeDefaultRing,
+  validateRingRoles
+} = require('./ring-management');
+const {
+  getRingForUser,
+  registerRing,
+  discoverRings,
+  getRingMetadata,
+  updateRingMetadata,
+  isAnonymousRing
+} = require('./ring-registry');
+const {
+  hasRingAccess,
+  listRingKeys,
+  registerRingKey,
+  copyKeyBetweenRings,
+  moveKeyBetweenRings,
+  shareKeyWithinRing,
+  getKeySharingInfo
+} = require('./key-management');
+const {
+  storeVaultSecret,
+  getVaultSecret,
+  listVaultSecrets,
+  deleteVaultSecret,
+  hasVault,
+  getVaultMetadata
+} = require('./privacy-vault');
+const { getAuthUrl, verifyGoogleToken, verifyIdToken, isConfigured: isGoogleOAuthConfigured } = require('./google-oauth');
 const {
   generate2FACode,
   store2FAChallenge,
@@ -49,9 +72,6 @@ const {
   revokeDevice,
 } = require('./device-auth');
 // Load environment variables for local development
-// Priority: .env.local (local dev) > .env (shared defaults)
-require('dotenv').config({ path: '.env.local' }); // Load .env.local first (higher priority)
-require('dotenv').config(); // Then load .env as fallback
 
 // Architect partial password verification
 // Store temporary codes in memory (expire after 10 minutes)
@@ -81,7 +101,12 @@ try {
   client = null;
 }
 const PROJECT_ID = process.env.GCP_PROJECT || 'myl-zip-www';
+// Force port 8080 for Google OAuth redirect URI compatibility
 const PORT = process.env.PORT || 8080;
+if (PORT === 8000) {
+  console.warn('⚠️  PORT was set to 8000, but Google OAuth requires 8080. Overriding to 8080.');
+}
+const FINAL_PORT = PORT === 8000 ? 8080 : PORT;
 
 // Vercel KV is auto-configured - no initialization needed
 // Uses KV_REST_API_URL and KV_REST_API_TOKEN from Vercel environment
@@ -129,6 +154,8 @@ const authenticate = async (req, res, next) => {
           req.authType = 'device';
           req.deviceId = deviceValidation.deviceId;
           req.username = deviceValidation.username;
+          // Determine ring for device token
+          req.ringId = await getRingForUser(deviceValidation.username, true);
           return next();
         }
       } catch (err) {
@@ -143,6 +170,9 @@ const authenticate = async (req, res, next) => {
           req.token = token;
           req.clientId = validation.clientId;
           req.clientType = validation.clientType;
+          req.userEmail = validation.email;
+          // Determine ring for MCP token (from email)
+          req.ringId = await getRingForUser(validation.email, true);
           return next();
         } else {
           return sendResponse(res, 401, 'failure', null, 'Authentication failed', validation.reason || 'Invalid token');
@@ -165,6 +195,8 @@ const authenticate = async (req, res, next) => {
     
     if (username === MYKEYS_USER && password === MYKEYS_PASS) {
       req.authType = 'basic';
+      // Basic auth uses default ring
+      req.ringId = await getRingForUser(null, false) || 'default';
       return next();
     }
   }
@@ -233,15 +265,17 @@ function decrypt(encrypted, iv, authTag) {
 }
 
 // Helper function to get secret from GCP Secret Manager
-// Helper function to get secret from Redis/KV
-async function getSecretFromRedis(secretName) {
+// Helper function to get secret from Redis/KV (ring-scoped)
+async function getSecretFromRedis(secretName, ringId = null) {
   const kvClient = getKV();
   if (!kvClient) return null;
   
   try {
-    const value = await kvClient.get(`secret:${secretName}`);
+    // Ring-scoped secret key: ring:{ringId}:secret:{secretName}
+    const key = ringId ? `ring:${ringId}:secret:${secretName}` : `secret:${secretName}`;
+    const value = await kvClient.get(key);
     if (value === null) {
-      console.log(`[INFO] Secret ${secretName} not found in KV`);
+      console.log(`[INFO] Secret ${secretName} not found in KV${ringId ? ` for ring ${ringId}` : ''}`);
       return null;
     }
     return value;
@@ -251,23 +285,28 @@ async function getSecretFromRedis(secretName) {
   }
 }
 
-// Helper function to store secret in Redis
-async function storeSecretInRedis(secretName, secretValue, labels = {}) {
+// Helper function to store secret in Redis (ring-scoped)
+async function storeSecretInRedis(secretName, secretValue, labels = {}, ringId = null) {
   const kvClient = getKV();
   if (!kvClient) throw new Error('KV client not initialized');
   
   try {
+    // Ring-scoped secret key: ring:{ringId}:secret:{secretName}
+    const key = ringId ? `ring:${ringId}:secret:${secretName}` : `secret:${secretName}`;
+    const metaKey = ringId ? `ring:${ringId}:secret:${secretName}:meta` : `secret:${secretName}:meta`;
+    
     // Check if secret exists
-    const existing = await kvClient.get(`secret:${secretName}`);
+    const existing = await kvClient.get(key);
     const exists = existing !== null;
     
     // Store secret value
-    await kvClient.set(`secret:${secretName}`, secretValue);
+    await kvClient.set(key, secretValue);
     
     // Store metadata if labels provided
     if (Object.keys(labels).length > 0) {
-      await kvClient.set(`secret:${secretName}:meta`, JSON.stringify({
-        labels,
+      await kvClient.set(metaKey, JSON.stringify({
+        ...labels,
+        ringId: ringId || null,
         updatedAt: new Date().toISOString()
       }));
     }
@@ -330,23 +369,26 @@ async function storeSecretInGCP(secretName, secretValue, labels = {}) {
   }
 }
 
-// Unified secret getter - Simple: Read from Redis or GCP
-async function getSecret(secretName) {
+// Unified secret getter - Simple: Read from Redis or GCP (ring-scoped)
+async function getSecret(secretName, ringId = null) {
   if (SECRET_STORAGE_MODE === 'gcp') {
-    return await getSecretFromGCP(secretName);
+    // GCP storage: use ring-scoped secret name
+    const gcpSecretName = ringId ? `ring-${ringId}-${secretName}` : secretName;
+    return await getSecretFromGCP(gcpSecretName);
   }
   
-  // Read from Redis
-  const value = await getSecretFromRedis(secretName);
+  // Read from Redis (ring-scoped)
+  const value = await getSecretFromRedis(secretName, ringId);
   if (value !== null) {
     return value;
   }
   
   // Fallback to GCP if hybrid mode
   if (SECRET_STORAGE_MODE === 'hybrid' && client) {
-    const gcpValue = await getSecretFromGCP(secretName);
+    const gcpSecretName = ringId ? `ring-${ringId}-${secretName}` : secretName;
+    const gcpValue = await getSecretFromGCP(gcpSecretName);
     if (gcpValue) {
-      await storeSecretInRedis(secretName, gcpValue);
+      await storeSecretInRedis(secretName, gcpValue, {}, ringId);
       return gcpValue;
     }
   }
@@ -354,19 +396,24 @@ async function getSecret(secretName) {
   return null;
 }
 
-// Unified secret setter - Simple: Store in Redis or GCP
-async function storeSecret(secretName, secretValue, labels = {}) {
+// Unified secret setter - Simple: Store in Redis or GCP (ring-scoped)
+async function storeSecret(secretName, secretValue, labels = {}, ringId = null) {
   if (SECRET_STORAGE_MODE === 'gcp') {
-    return await storeSecretInGCP(secretName, secretValue, labels);
+    // GCP storage: use ring-scoped secret name
+    const gcpSecretName = ringId ? `ring-${ringId}-${secretName}` : secretName;
+    const gcpLabels = { ...labels, ringId: ringId || null };
+    return await storeSecretInGCP(gcpSecretName, secretValue, gcpLabels);
   }
   
-  // Store in Redis
-  const result = await storeSecretInRedis(secretName, secretValue, labels);
+  // Store in Redis (ring-scoped)
+  const result = await storeSecretInRedis(secretName, secretValue, labels, ringId);
   
   // Sync to GCP if hybrid mode
   if (SECRET_STORAGE_MODE === 'hybrid' && client) {
     try {
-      await storeSecretInGCP(secretName, secretValue, labels);
+      const gcpSecretName = ringId ? `ring-${ringId}-${secretName}` : secretName;
+      const gcpLabels = { ...labels, ringId: ringId || null };
+      await storeSecretInGCP(gcpSecretName, secretValue, gcpLabels);
     } catch (error) {
       console.warn(`Failed to sync ${secretName} to GCP:`, error.message);
     }
@@ -422,6 +469,32 @@ app.get('/winget-restore.ps1', (req, res) => {
   });
 });
 
+// MCP Server Version Endpoint
+app.get('/api/mcp/version', (req, res) => {
+  try {
+    const fs = require('fs');
+    // Read version from mcp-server.ts source
+    const mcpServerPath = path.join(__dirname, 'mcp-server.ts');
+    let version = '2.0.0'; // Default version
+    
+    if (fs.existsSync(mcpServerPath)) {
+      const content = fs.readFileSync(mcpServerPath, 'utf8');
+      const versionMatch = content.match(/const MCP_SERVER_VERSION\s*=\s*['"]([^'"]+)['"]/);
+      if (versionMatch) {
+        version = versionMatch[1];
+      }
+    }
+    
+    res.json({
+      version: version,
+      downloadUrl: `${req.protocol}://${req.get('host')}/mcp-server.js`,
+      updateAvailable: false, // Client should compare versions
+    });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to get version', version: '2.0.0' });
+  }
+});
+
 // Serve MCP server JavaScript file (compiled)
 app.get('/mcp-server.js', (req, res) => {
   // Try compiled version first
@@ -444,7 +517,7 @@ app.get('/mcp-server.js', (req, res) => {
       error: 'Compiled MCP server not found', 
       message: 'The compiled JavaScript version is not available. You can download the TypeScript source instead.',
       alternatives: [
-        'Download TypeScript source: https://mykeys.zip/mcp-server.ts',
+        'Download TypeScript source: you create the https://mykeys.zip/mcp-server.ts',
         'Build locally: npm run build:mcp',
         'Use TypeScript directly: npx tsx mcp-server.ts'
       ]
@@ -667,8 +740,26 @@ app.delete('/api/secrets/:name', authenticate, async (req, res) => {
 app.get('/api/v1/secrets/:ecosystem/:secretName', authenticate, async (req, res) => {
   try {
     const { ecosystem, secretName } = req.params;
+    const ringId = req.ringId; // From authenticate middleware
+    const userEmail = req.userEmail; // From authentication
     
-    // Try to get from GCP Secret Manager first
+    // Ensure ring is registered
+    if (ringId) {
+      await updateRingMetadata(ringId, {}); // Update lastSeen
+    }
+    
+    // Verify user has access to this ring (content belongs to ring, accessible to all members)
+    if (ringId && userEmail) {
+      const hasAccess = await hasRingAccess(userEmail, ringId);
+      if (!hasAccess) {
+        return res.status(403).json({
+          error: 'Access denied',
+          message: 'You do not have access to this ring\'s content'
+        });
+      }
+    }
+    
+    // Try to get from ring-scoped storage first
     // Format: ecosystem-secretName or just secretName
     const possibleNames = [
       `${ecosystem}-${secretName}`,
@@ -677,7 +768,7 @@ app.get('/api/v1/secrets/:ecosystem/:secretName', authenticate, async (req, res)
     
     let secretValue = null;
     for (const name of possibleNames) {
-      secretValue = await getSecret(name);
+      secretValue = await getSecret(name, ringId);
       if (secretValue) break;
     }
     
@@ -732,14 +823,20 @@ app.get('/api/v1/secrets/:ecosystem/:secretName', authenticate, async (req, res)
   }
 });
 
-// Store secret (v1 format with ecosystem)
+// Store secret (v1 format with ecosystem) - Ring-scoped
 app.post('/api/v1/secrets/:ecosystem', authenticate, async (req, res) => {
   try {
     const { ecosystem } = req.params;
     const { secret_name, secret_value, description } = req.body;
+    const ringId = req.ringId; // From authenticate middleware
     
     if (!secret_name || secret_value === undefined) {
       return res.status(400).json({ error: 'secret_name and secret_value are required' });
+    }
+    
+    // Ensure ring is registered
+    if (ringId) {
+      await updateRingMetadata(ringId, {}); // Update lastSeen
     }
     
     const secretName = `${ecosystem}-${secret_name}`;
@@ -749,16 +846,23 @@ app.post('/api/v1/secrets/:ecosystem', authenticate, async (req, res) => {
     
     const labels = {
       ecosystem: ecosystem,
+      ringId: ringId || null,
       ...(description && { description: description })
     };
     
-    const result = await storeSecret(secretName, secretValueStr, labels);
+    const result = await storeSecret(secretName, secretValueStr, labels, ringId);
+    
+    // Register key in ring's key list (content belongs to ring)
+    if (ringId) {
+      await registerRingKey(ringId, secretName);
+    }
     
     res.json({
       success: true,
       secret_name: secret_name,
       ecosystem: ecosystem,
-      message: `Secret ${secret_name} ${result.created ? 'created' : 'updated'} successfully`
+      ringId: ringId || null,
+      message: `Secret ${secret_name} ${result.created ? 'created' : 'updated'} successfully. Content is accessible to all ring members.`
     });
   } catch (error) {
     console.error(`Error storing secret ${req.params.ecosystem}:`, error.message);
@@ -769,33 +873,75 @@ app.post('/api/v1/secrets/:ecosystem', authenticate, async (req, res) => {
   }
 });
 
-// List secrets for ecosystem (v1 format)
+// List secrets for ecosystem (v1 format) - Ring-scoped, content belongs to ring
 app.get('/api/v1/secrets/:ecosystem', authenticate, async (req, res) => {
   try {
     const { ecosystem } = req.params;
+    const ringId = req.ringId; // From authenticate middleware
+    const userEmail = req.userEmail;
     
-    const [secrets] = await client.listSecrets({
-      parent: `projects/${PROJECT_ID}`,
-    });
+    // Verify user has access to this ring
+    if (ringId && userEmail) {
+      const hasAccess = await hasRingAccess(userEmail, ringId);
+      if (!hasAccess) {
+        return res.status(403).json({
+          error: 'Access denied',
+          message: 'You do not have access to this ring\'s content'
+        });
+      }
+    }
     
-    // Filter secrets by ecosystem label or name prefix
-    const ecosystemSecrets = secrets
-      .filter(secret => {
-        const name = secret.name.split('/').pop();
-        const labels = secret.labels || {};
-        return name.startsWith(`${ecosystem}-`) || labels.ecosystem === ecosystem;
-      })
-      .map(secret => ({
-        secret_name: secret.name.split('/').pop().replace(`${ecosystem}-`, ''),
-        ecosystem: ecosystem,
-        created: secret.createTime,
-        labels: secret.labels || {}
-      }));
+    // Get keys from ring (content belongs to ring, accessible to all members)
+    const ringKeys = ringId ? await listRingKeys(ringId) : [];
+    
+    // Also check GCP for backward compatibility
+    let ecosystemSecrets = [];
+    if (client) {
+      try {
+        const [secrets] = await client.listSecrets({
+          parent: `projects/${PROJECT_ID}`,
+        });
+        
+        // Filter secrets by ring and ecosystem
+        ecosystemSecrets = secrets
+          .filter(secret => {
+            const name = secret.name.split('/').pop();
+            const labels = secret.labels || {};
+            const secretRingId = labels.ringId || (name.startsWith('ring-') ? name.split('-')[1] : null);
+            
+            // Only show secrets from user's ring
+            if (ringId && secretRingId !== ringId) {
+              return false;
+            }
+            
+            return name.startsWith(`${ecosystem}-`) || labels.ecosystem === ecosystem;
+          })
+          .map(secret => ({
+            secret_name: secret.name.split('/').pop().replace(`${ecosystem}-`, '').replace(/^ring-[^-]+-/, ''),
+            ecosystem: ecosystem,
+            ringId: secret.labels?.ringId || null,
+            created: secret.createTime,
+            labels: secret.labels || {}
+          }));
+      } catch (gcpError) {
+        console.warn('Error listing secrets from GCP:', gcpError.message);
+      }
+    }
+    
+    // Combine ring keys and GCP secrets
+    const allSecrets = [...ringKeys.map(key => ({
+      secret_name: key,
+      ecosystem: ecosystem,
+      ringId: ringId || null,
+      accessibleTo: 'all-ring-members'
+    })), ...ecosystemSecrets];
     
     res.json({
       success: true,
       ecosystem: ecosystem,
-      secrets: ecosystemSecrets
+      ringId: ringId || null,
+      secrets: allSecrets,
+      message: ringId ? 'Content belongs to ring and is accessible to all ring members' : 'Listing all accessible secrets'
     });
   } catch (error) {
     console.error(`Error listing secrets for ${req.params.ecosystem}:`, error.message);
@@ -963,26 +1109,30 @@ app.post('/api/auth/request-mfa-code', async (req, res) => {
     let result = { success: false };
     
     if (phoneNumber) {
+      // Normalize phone number (trim) for consistent storage/retrieval
+      const normalizedPhone = phoneNumber.trim();
       // Determine service name from request (defaults to 'mykeys')
       const serviceName = req.body.service || 'mykeys';
       // For SMS, send the 4-digit code via Twilio
-      result = await send2FACodeViaSMS(phoneNumber, code, false, serviceName);
+      result = await send2FACodeViaSMS(normalizedPhone, code, false, serviceName);
       if (result.success) {
-        mfaCodes.set(phoneNumber, {
+        mfaCodes.set(normalizedPhone, {
           code,
           expiresAt,
           verificationSid: result.verificationSid,
         });
       }
     } else if (email) {
-      const emailResult = await send2FACodeViaEmail(email, code);
+      // Normalize email (trim + lowercase) for consistent storage/retrieval
+      const normalizedEmail = email.trim().toLowerCase();
+      const emailResult = await send2FACodeViaEmail(normalizedEmail, code);
       if (emailResult.success) {
-        mfaCodes.set(email, {
+        mfaCodes.set(normalizedEmail, {
           code,
           expiresAt,
           verificationSid: null,
         });
-        result = { success: true, method: 'email' };
+        result = { success: true, method: 'email', target: normalizedEmail };
       } else {
         result = { success: false, error: emailResult.error || 'Failed to send email' };
       }
@@ -1017,10 +1167,24 @@ app.post('/api/auth/verify-mfa-code', async (req, res) => {
       return sendResponse(res, 400, 'failure', null, 'Missing required fields', 'Code and phone number or email are required');
     }
     
-    const identifier = phoneNumber || email;
+    // Normalize identifier (email: lowercase + trim, phone: trim)
+    let identifier;
+    if (phoneNumber) {
+      identifier = phoneNumber.trim();
+    } else if (email) {
+      identifier = email.trim().toLowerCase();
+    } else {
+      return sendResponse(res, 400, 'failure', null, 'Missing required fields', 'Code and phone number or email are required');
+    }
+    
+    // Normalize code (remove non-digits, ensure 4 digits)
+    const normalizedCode = code.toString().replace(/\D/g, '').padStart(4, '0').slice(0, 4);
+    
     const mfaData = mfaCodes.get(identifier);
     
     if (!mfaData) {
+      console.error(`MFA code not found for identifier: ${identifier}`);
+      console.error(`Available identifiers: ${Array.from(mfaCodes.keys()).join(', ')}`);
       return sendResponse(res, 401, 'failure', null, 'No verification code found', 'Please request a verification code first.');
     }
     
@@ -1029,8 +1193,12 @@ app.post('/api/auth/verify-mfa-code', async (req, res) => {
       return sendResponse(res, 401, 'failure', null, 'Verification code expired', 'Please request a new verification code.');
     }
     
-    // Verify code - simple comparison (we send our own 4-digit codes)
-    if (mfaData.code !== code) {
+    // Normalize stored code for comparison
+    const storedCode = mfaData.code.toString().replace(/\D/g, '').padStart(4, '0').slice(0, 4);
+    
+    // Verify code - normalized comparison
+    if (storedCode !== normalizedCode) {
+      console.error(`Code mismatch - stored: "${storedCode}", received: "${normalizedCode}"`);
       return sendResponse(res, 401, 'failure', null, 'Invalid verification code', 'The code you entered is incorrect.');
     }
     
@@ -1042,10 +1210,15 @@ app.post('/api/auth/verify-mfa-code', async (req, res) => {
     const finalClientType = clientType || 'web';
     const finalExpiresInDays = expiresInDays || 90;
     
+    // Get user roles for the email
+    const { getUserRoles } = require('./role-management');
+    const userRoles = email ? await getUserRoles(email.trim().toLowerCase()) : ['member'];
+    
     const tokenResult = await generateMCPToken(
       finalClientId,
       finalClientType,
-      finalExpiresInDays
+      finalExpiresInDays,
+      email ? email.trim().toLowerCase() : null
     );
     
     return sendResponse(res, 200, 'success', {
@@ -1059,61 +1232,234 @@ app.post('/api/auth/verify-mfa-code', async (req, res) => {
   }
 });
 
-// ========== Admin Endpoints ==========
-
-// Get admin information (for mykeys-cli)
-app.get('/api/admin/info', async (req, res) => {
+// Middleware to require owner or architect role for admin endpoints
+// Middleware that allows either admin role (via Bearer token) or Google OAuth
+const requireAdminRoleOrGoogle = async (req, res, next) => {
   try {
-    // Extract token
+    // First, try Google OAuth (check for X-Google-ID-Token header)
+    const googleIdToken = req.headers['x-google-id-token'] || req.headers['X-Google-ID-Token'] || req.body?.idToken;
+    
+    console.log('[requireAdminRoleOrGoogle] Checking authentication...');
+    console.log('[requireAdminRoleOrGoogle] Headers:', JSON.stringify(req.headers, null, 2));
+    console.log('[requireAdminRoleOrGoogle] Google ID Token present:', !!googleIdToken);
+    console.log('[requireAdminRoleOrGoogle] Google OAuth configured:', isGoogleOAuthConfigured());
+    
+    if (googleIdToken && isGoogleOAuthConfigured()) {
+      try {
+        console.log('[requireAdminRoleOrGoogle] Verifying Google ID token...');
+        const googleUser = await verifyIdToken(googleIdToken);
+        console.log('[requireAdminRoleOrGoogle] Google user verified:', googleUser.verified);
+        console.log('[requireAdminRoleOrGoogle] Google user email:', googleUser.email);
+        
+        if (googleUser.verified) {
+          const userRoles = await getUserRoles(googleUser.email);
+          console.log('[requireAdminRoleOrGoogle] User roles:', userRoles);
+          const hasAdminAccess = userRoles.includes('owner') || userRoles.includes('architect');
+          console.log('[requireAdminRoleOrGoogle] Has admin access:', hasAdminAccess);
+          
+          if (hasAdminAccess) {
+            req.userEmail = googleUser.email;
+            req.userRoles = userRoles;
+            req.isGoogleAuth = true;
+            console.log('[requireAdminRoleOrGoogle] ✅ Google auth successful, proceeding...');
+            return next();
+          } else {
+            console.log('[requireAdminRoleOrGoogle] ❌ User does not have admin access');
+          }
+        }
+      } catch (googleError) {
+        // Google auth failed, fall through to Bearer token check
+        console.error('[requireAdminRoleOrGoogle] Google OAuth verification failed:', googleError.message);
+        console.error('[requireAdminRoleOrGoogle] Error stack:', googleError.stack);
+      }
+    } else {
+      if (!googleIdToken) {
+        console.log('[requireAdminRoleOrGoogle] ⚠️  No Google ID token found in headers');
+      }
+      if (!isGoogleOAuthConfigured()) {
+        console.log('[requireAdminRoleOrGoogle] ⚠️  Google OAuth not configured');
+      }
+    }
+    
+    // Fall back to Bearer token authentication (requireAdminRole logic)
     const authHeader = req.headers.authorization;
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      return res.status(401).json({
-        error: 'Authentication required',
-        message: 'Bearer token required'
-      });
+      return sendResponse(res, 401, 'failure', null, 'Authentication required', 'Bearer token or Google OAuth required');
     }
-
-    const token = authHeader.substring(7);
     
-    // Basic token format validation (64 hex chars)
-    if (!/^[a-f0-9]{64}$/.test(token)) {
-      return res.status(401).json({
-        error: 'Authentication failed',
-        message: 'Invalid token format'
-      });
+    const token = authHeader.substring(7);
+    const tokenData = validateMCPToken(token);
+    
+    if (!tokenData || !tokenData.valid) {
+      return sendResponse(res, 401, 'failure', null, 'Invalid token', 'The provided token is invalid or expired');
     }
-
-    // Build admin info response
-    // Note: Full validation is skipped to avoid GCP timeout issues
-    const adminInfo = {
-      role: 'architect',
-      context: 'mykeys-cli',
-      tokenInfo: {
-        clientId: 'cli-client',
-        clientType: 'cli',
-        expiresAt: new Date(Date.now() + 90 * 24 * 60 * 60 * 1000).toISOString(),
-      },
-      permissions: [
-        'secrets:read',
-        'secrets:write',
-        'tokens:generate',
-        'admin:view'
-      ],
-      stats: {
-        secretsCount: 0,
-        tokensCount: 0,
-      }
-    };
-
-    return res.status(200).json(adminInfo);
+    
+    if (!tokenData.email) {
+      return sendResponse(res, 403, 'failure', null, 'Token missing email', 'This token does not have an associated email address');
+    }
+    
+    const userRoles = await getUserRoles(tokenData.email);
+    const hasAdminAccess = userRoles.includes('owner') || userRoles.includes('architect');
+    
+    if (!hasAdminAccess) {
+      return sendResponse(res, 403, 'failure', null, 'Insufficient permissions', 'Owner or architect role required');
+    }
+    
+    req.userEmail = tokenData.email;
+    req.userRoles = userRoles;
+    req.isGoogleAuth = false;
+    next();
   } catch (error) {
-    console.error('Admin info error:', error);
-    return res.status(500).json({
-      error: 'Internal server error',
-      message: error.message
-    });
+    console.error('Error in requireAdminRoleOrGoogle middleware:', error.message);
+    return sendResponse(res, 500, 'failure', null, 'Authentication error', 'An error occurred during authentication', error.message);
+  }
+};
+
+const requireAdminRole = async (req, res, next) => {
+  try {
+    const authHeader = req.headers.authorization;
+    
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return sendResponse(res, 401, 'failure', null, 'Authentication required', 'Bearer token is required');
+    }
+    
+    const token = authHeader.substring(7);
+    const validation = await validateMCPToken(token);
+    
+    if (!validation.valid) {
+      return sendResponse(res, 401, 'failure', null, 'Invalid token', validation.reason || 'Token validation failed');
+    }
+    
+    // Check if user has owner or architect role
+    const userEmail = validation.email;
+    if (!userEmail) {
+      return sendResponse(res, 403, 'failure', null, 'Forbidden', 'Token does not have associated email. Only tokens generated via email MFA can access admin endpoints.');
+    }
+    
+    const userRoles = await getUserRoles(userEmail);
+    if (!userRoles.includes('owner') && !userRoles.includes('architect')) {
+      return sendResponse(res, 403, 'failure', null, 'Forbidden', 'Only owners and architects can access admin endpoints');
+    }
+    
+    // Attach user info to request
+    req.userEmail = userEmail;
+    req.userRoles = userRoles;
+    req.tokenValidation = validation;
+    
+    next();
+  } catch (error) {
+    console.error('Error in requireAdminRole middleware:', error.message);
+    return sendResponse(res, 500, 'failure', null, 'Authentication error', 'An error occurred while checking permissions', error.message);
+  }
+};
+
+// ========== Google OAuth Endpoints ==========
+
+// Get Google OAuth authorization URL
+app.get('/api/auth/google/url', (req, res) => {
+  try {
+    if (!isGoogleOAuthConfigured()) {
+      return sendResponse(res, 503, 'failure', null, 'Google OAuth not configured', 'Google OAuth credentials are not set');
+    }
+    
+    const authUrl = getAuthUrl();
+    return sendResponse(res, 200, 'success', { authUrl }, null, 'Google OAuth URL generated');
+  } catch (error) {
+    console.error('Error generating Google OAuth URL:', error.message);
+    return sendResponse(res, 500, 'failure', null, 'Failed to generate OAuth URL', 'An error occurred while generating the OAuth URL', error.message);
   }
 });
+
+// Verify Google OAuth code and return user info
+app.post('/api/auth/google/verify', async (req, res) => {
+  try {
+    if (!isGoogleOAuthConfigured()) {
+      return sendResponse(res, 503, 'failure', null, 'Google OAuth not configured', 'Google OAuth credentials are not set');
+    }
+    
+    const { code, idToken } = req.body;
+    
+    if (!code && !idToken) {
+      return sendResponse(res, 400, 'failure', null, 'Missing required fields', 'Either code or idToken is required');
+    }
+    
+    let userInfo;
+    if (idToken) {
+      // Client-side verification (more secure)
+      userInfo = await verifyIdToken(idToken);
+    } else {
+      // Server-side code exchange
+      userInfo = await verifyGoogleToken(code);
+    }
+    
+    if (!userInfo.verified) {
+      return sendResponse(res, 403, 'failure', null, 'Email not verified', 'Google email address is not verified');
+    }
+    
+    return sendResponse(res, 200, 'success', {
+      email: userInfo.email
+      // Only return email - name and picture are not stored (comma removed intentionally)
+    }, null, 'Google authentication successful');
+  } catch (error) {
+    console.error('Error verifying Google OAuth:', error.message);
+    return sendResponse(res, 500, 'failure', null, 'Failed to verify Google OAuth', 'An error occurred while verifying Google authentication', error.message);
+  }
+});
+
+// Verify Google OAuth and check admin role (for UI access - no token needed)
+app.post('/api/auth/google/verify-admin', async (req, res) => {
+  try {
+    if (!isGoogleOAuthConfigured()) {
+      return sendResponse(res, 503, 'failure', null, 'Google OAuth not configured', 'Google OAuth credentials are not set');
+    }
+    
+    const { code, idToken } = req.body;
+    
+    if (!code && !idToken) {
+      return sendResponse(res, 400, 'failure', null, 'Missing required fields', 'Either code or idToken is required');
+    }
+    
+    // Verify Google ID token
+    let googleUser;
+    let finalIdToken = null;
+    if (idToken) {
+      // Client-side verification - we already have the ID token
+      googleUser = await verifyIdToken(idToken);
+      finalIdToken = idToken; // Use the provided ID token
+    } else {
+      // Server-side code exchange - get ID token from exchange
+      googleUser = await verifyGoogleToken(code);
+      finalIdToken = googleUser.idToken; // Get ID token from exchange
+    }
+    
+    if (!googleUser.verified) {
+      return sendResponse(res, 403, 'failure', null, 'Email not verified', 'Google email address is not verified');
+    }
+    
+    // Check if user has admin role based on Google email
+    const userRoles = await getUserRoles(googleUser.email);
+    const hasAdminAccess = userRoles.includes('owner') || userRoles.includes('architect');
+    
+    if (!hasAdminAccess) {
+      return sendResponse(res, 403, 'failure', null, 'Insufficient permissions', 'User does not have owner or architect role');
+    }
+    
+    return sendResponse(res, 200, 'success', {
+      email: googleUser.email,
+      // Only return email - name and picture are not stored
+      roles: userRoles,
+      hasAdminAccess: true,
+      idToken: finalIdToken // Always return ID token (from either source)
+    }, null, 'Google authentication successful - admin access granted');
+  } catch (error) {
+    console.error('Error verifying Google OAuth admin access:', error.message);
+    return sendResponse(res, 500, 'failure', null, 'Failed to verify authentication', 'An error occurred while verifying Google authentication', error.message);
+  }
+});
+
+// ========== Admin Endpoints ==========
+
+// Get admin information (for mykeys-cli) - REMOVED DUPLICATE, using the one below
 
 // ========== MCP Token Generation Endpoints ==========
 
@@ -1278,34 +1624,13 @@ app.post('/api/mcp/token/validate', async (req, res) => {
   }
 });
 
-// Get admin info based on token context (architect role)
-app.get('/api/admin/info', async (req, res) => {
+// Get admin info (requires owner or architect role)
+app.get('/api/admin/info', requireAdminRole, async (req, res) => {
   try {
-    const authHeader = req.headers.authorization;
-    
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      return res.status(401).json({
-        error: 'Authentication required',
-        message: 'Bearer token is required',
-      });
-    }
-    
-    const token = authHeader.substring(7);
-    
-    // Validate token and get token info
-    const validation = await validateMCPToken(token);
-    
-    if (!validation.valid) {
-      return res.status(401).json({
-        error: 'Invalid token',
-        message: validation.reason || 'Token validation failed',
-      });
-    }
-    
-    // Determine role based on token context
-    // If token was generated with architect code, user is architect
-    const isArchitect = validation.clientType === 'generic' || validation.clientType === 'cursor' || validation.clientType === 'warp';
-    const role = isArchitect ? 'architect' : 'user';
+    // User info already attached by requireAdminRole middleware
+    const userEmail = req.userEmail;
+    const userRoles = req.userRoles;
+    const validation = req.tokenValidation;
     const context = 'token-based'; // Token-based authentication
     
     // Get stats (if GCP is available)
@@ -1335,9 +1660,26 @@ app.get('/api/admin/info', async (req, res) => {
       console.warn('Could not fetch stats:', error.message);
     }
     
+    // Determine permissions based on roles
+    const permissions = [];
+    if (userRoles.includes('owner') || userRoles.includes('architect')) {
+      permissions.push('read_secrets', 'write_secrets', 'list_secrets', 'manage_tokens', 'architect_access', 'full_system_access', 'roles:manage');
+    } else if (userRoles.includes('member')) {
+      permissions.push('read_secrets', 'write_secrets', 'list_secrets');
+    }
+    
+    const capabilities = [
+      'API access',
+      'Secret management',
+      'Token generation',
+      ...(userRoles.includes('owner') || userRoles.includes('architect') ? ['Architect-level operations', 'System administration', 'Role management'] : []),
+    ];
+    
     // Build response
     const adminInfo = {
-      role: role,
+      email: userEmail,
+      roles: userRoles,
+      primaryRole: userRoles[0] || 'member',
       context: context,
       tokenInfo: {
         clientId: validation.clientId,
@@ -1345,19 +1687,8 @@ app.get('/api/admin/info', async (req, res) => {
         expiresAt: validation.expiresAt ? validation.expiresAt.toISOString() : null,
         permissions: validation.permissions || ['read', 'write'],
       },
-      permissions: [
-        'read_secrets',
-        'write_secrets',
-        'list_secrets',
-        'manage_tokens',
-        ...(isArchitect ? ['architect_access', 'full_system_access'] : []),
-      ],
-      capabilities: [
-        'API access',
-        'Secret management',
-        'Token generation',
-        ...(isArchitect ? ['Architect-level operations', 'System administration'] : []),
-      ],
+      permissions: permissions,
+      capabilities: capabilities,
       stats: {
         secretsCount: secretsCount,
         ecosystemsCount: ecosystemsCount,
@@ -1405,6 +1736,658 @@ app.post('/api/mcp/token/revoke', authenticate, async (req, res) => {
       error: 'Failed to revoke token',
       details: error.message,
     });
+  }
+});
+
+// ========== Role Management Endpoints ==========
+
+// Get all user roles (requires owner or architect)
+app.get('/api/admin/roles', requireAdminRoleOrGoogle, async (req, res) => {
+  try {
+    // User info already attached by requireAdminRoleOrGoogle middleware
+    
+    // Get all user roles
+    const allRoles = await getAllUserRoles();
+    
+    return sendResponse(res, 200, 'success', {
+      users: Object.keys(allRoles).map(email => ({
+        email,
+        roles: allRoles[email]
+      }))
+    }, null, 'User roles retrieved successfully');
+  } catch (error) {
+    console.error('Error getting user roles:', error.message);
+    return sendResponse(res, 500, 'failure', null, 'Failed to get user roles', 'An error occurred while retrieving user roles', error.message);
+  }
+});
+
+// Set roles for a user (requires owner or architect)
+app.post('/api/admin/roles', requireAdminRoleOrGoogle, async (req, res) => {
+  try {
+    // User info already attached by requireAdminRole middleware
+    
+    const { email, roles } = req.body;
+    
+    if (!email || !roles || !Array.isArray(roles)) {
+      return sendResponse(res, 400, 'failure', null, 'Missing required fields', 'Email and roles array are required');
+    }
+    
+    // Set roles
+    await setUserRoles(email, roles);
+    
+    return sendResponse(res, 200, 'success', {
+      email,
+      roles: await getUserRoles(email)
+    }, null, 'User roles updated successfully');
+  } catch (error) {
+    console.error('Error setting user roles:', error.message);
+    return sendResponse(res, 500, 'failure', null, 'Failed to set user roles', 'An error occurred while setting user roles', error.message);
+  }
+});
+
+// Get roles for a specific user (requires owner or architect)
+app.get('/api/admin/roles/:email', requireAdminRoleOrGoogle, async (req, res) => {
+  try {
+    // User info already attached by requireAdminRoleOrGoogle middleware
+    
+    const targetEmail = req.params.email;
+    const targetRoles = await getUserRoles(targetEmail);
+    
+    return sendResponse(res, 200, 'success', {
+      email: targetEmail,
+      roles: targetRoles
+    }, null, 'User roles retrieved successfully');
+  } catch (error) {
+    console.error('Error getting user roles:', error.message);
+    return sendResponse(res, 500, 'failure', null, 'Failed to get user roles', 'An error occurred while retrieving user roles', error.message);
+  }
+});
+
+// Remove roles for a user (sets to member only) (requires owner or architect)
+app.delete('/api/admin/roles/:email', requireAdminRoleOrGoogle, async (req, res) => {
+  try {
+    // User info already attached by requireAdminRoleOrGoogle middleware
+    
+    const targetEmail = req.params.email;
+    await removeUserRoles(targetEmail);
+    
+    return sendResponse(res, 200, 'success', {
+      email: targetEmail,
+      roles: ['member']
+    }, null, 'User roles reset to member');
+  } catch (error) {
+    console.error('Error removing user roles:', error.message);
+    return sendResponse(res, 500, 'failure', null, 'Failed to remove user roles', 'An error occurred while removing user roles', error.message);
+  }
+});
+
+// ========== Ring Management Endpoints ==========
+
+// Create a new ring (requires owner or architect)
+app.post('/api/admin/rings', requireAdminRole, async (req, res) => {
+  try {
+    const { ringId, firstEmail, initialRoles } = req.body;
+    
+    if (!firstEmail) {
+      return sendResponse(res, 400, 'failure', null, 'Missing required field', 'firstEmail is required');
+    }
+    
+    const ring = await createRing(ringId, firstEmail, initialRoles);
+    
+    return sendResponse(res, 201, 'success', ring, null, 'Ring created successfully');
+  } catch (error) {
+    console.error('Error creating ring:', error.message);
+    return sendResponse(res, 500, 'failure', null, 'Failed to create ring', 'An error occurred while creating the ring', error.message);
+  }
+});
+
+// Get all rings (requires owner or architect)
+app.get('/api/admin/rings', requireAdminRole, async (req, res) => {
+  try {
+    const rings = await getAllRings();
+    
+    return sendResponse(res, 200, 'success', rings, null, 'Rings retrieved successfully');
+  } catch (error) {
+    console.error('Error getting rings:', error.message);
+    return sendResponse(res, 500, 'failure', null, 'Failed to get rings', 'An error occurred while retrieving rings', error.message);
+  }
+});
+
+// Get a specific ring (requires owner or architect, or member of that ring)
+app.get('/api/admin/rings/:ringId', requireAdminRoleOrGoogle, async (req, res) => {
+  try {
+    const { ringId } = req.params;
+    const ring = await getRing(ringId);
+    
+    if (!ring) {
+      return sendResponse(res, 404, 'failure', null, 'Ring not found', `Ring ${ringId} does not exist`);
+    }
+    
+    // Check if user is member of this ring
+    const userEmail = req.userEmail;
+    if (userEmail && ring.members[userEmail]) {
+      return sendResponse(res, 200, 'success', ring, null, 'Ring retrieved successfully');
+    }
+    
+    // Check if user has admin role (owner/architect)
+    if (req.userRoles && (req.userRoles.includes('owner') || req.userRoles.includes('architect'))) {
+      return sendResponse(res, 200, 'success', ring, null, 'Ring retrieved successfully');
+    }
+    
+    return sendResponse(res, 403, 'failure', null, 'Forbidden', 'You do not have access to this ring');
+  } catch (error) {
+    console.error('Error getting ring:', error.message);
+    return sendResponse(res, 500, 'failure', null, 'Failed to get ring', 'An error occurred while retrieving the ring', error.message);
+  }
+});
+
+// Get ring for current user's email
+app.get('/api/admin/rings/by-email/:email', requireAdminRoleOrGoogle, async (req, res) => {
+  try {
+    const { email } = req.params;
+    const ringId = await getRingForEmail(email);
+    
+    if (!ringId) {
+      return sendResponse(res, 404, 'failure', null, 'Ring not found', `No ring found for email ${email}`);
+    }
+    
+    const ring = await getRing(ringId);
+    
+    return sendResponse(res, 200, 'success', ring, null, 'Ring retrieved successfully');
+  } catch (error) {
+    console.error('Error getting ring for email:', error.message);
+    return sendResponse(res, 500, 'failure', null, 'Failed to get ring', 'An error occurred while retrieving the ring', error.message);
+  }
+});
+
+// Update ring roles (requires owner or architect of that ring)
+app.put('/api/admin/rings/:ringId/roles', requireAdminRole, async (req, res) => {
+  try {
+    const { ringId } = req.params;
+    const { roles } = req.body;
+    
+    if (!roles || typeof roles !== 'object') {
+      return sendResponse(res, 400, 'failure', null, 'Missing required field', 'roles object is required');
+    }
+    
+    const ring = await updateRingRoles(ringId, roles);
+    
+    return sendResponse(res, 200, 'success', ring, null, 'Ring roles updated successfully');
+  } catch (error) {
+    console.error('Error updating ring roles:', error.message);
+    return sendResponse(res, 500, 'failure', null, 'Failed to update ring roles', 'An error occurred while updating ring roles', error.message);
+  }
+});
+
+// Add member to ring (requires owner or architect of that ring)
+app.post('/api/admin/rings/:ringId/members', requireAdminRole, async (req, res) => {
+  try {
+    const { ringId } = req.params;
+    const { email, roles } = req.body;
+    
+    if (!email) {
+      return sendResponse(res, 400, 'failure', null, 'Missing required field', 'email is required');
+    }
+    
+    const memberRoles = roles || ['member'];
+    const ring = await addRingMember(ringId, email, memberRoles);
+    
+    return sendResponse(res, 200, 'success', ring, null, 'Member added to ring successfully');
+  } catch (error) {
+    console.error('Error adding ring member:', error.message);
+    return sendResponse(res, 500, 'failure', null, 'Failed to add ring member', 'An error occurred while adding member to ring', error.message);
+  }
+});
+
+// Remove member from ring (requires owner or architect of that ring)
+app.delete('/api/admin/rings/:ringId/members/:email', requireAdminRole, async (req, res) => {
+  try {
+    const { ringId, email } = req.params;
+    
+    const ring = await removeRingMember(ringId, email);
+    
+    return sendResponse(res, 200, 'success', ring, null, 'Member removed from ring successfully');
+  } catch (error) {
+    console.error('Error removing ring member:', error.message);
+    return sendResponse(res, 500, 'failure', null, 'Failed to remove ring member', 'An error occurred while removing member from ring', error.message);
+  }
+});
+
+// Initialize default ring (migration helper - requires owner or architect)
+app.post('/api/admin/rings/initialize-default', requireAdminRole, async (req, res) => {
+  try {
+    const ring = await initializeDefaultRing();
+    
+    return sendResponse(res, 200, 'success', ring, null, 'Default ring initialized successfully');
+  } catch (error) {
+    console.error('Error initializing default ring:', error.message);
+    return sendResponse(res, 500, 'failure', null, 'Failed to initialize default ring', 'An error occurred while initializing default ring', error.message);
+  }
+});
+
+// Validate ring roles (utility endpoint)
+app.post('/api/admin/rings/validate', requireAdminRole, async (req, res) => {
+  try {
+    const { roles } = req.body;
+    
+    if (!roles || typeof roles !== 'object') {
+      return sendResponse(res, 400, 'failure', null, 'Missing required field', 'roles object is required');
+    }
+    
+    const validation = validateRingRoles(roles);
+    
+    return sendResponse(res, 200, 'success', validation, null, 'Ring roles validation completed');
+  } catch (error) {
+    console.error('Error validating ring roles:', error.message);
+    return sendResponse(res, 500, 'failure', null, 'Failed to validate ring roles', 'An error occurred while validating ring roles', error.message);
+  }
+});
+
+// ========== Ring Discovery & Mesh Connection Endpoints ==========
+
+// Discover all rings in ecosystem (minimal metadata only)
+app.get('/api/rings/discover', authenticate, async (req, res) => {
+  try {
+    const { includeAnonymous = 'true' } = req.query;
+    const includeAnon = includeAnonymous === 'true';
+    
+    const rings = await discoverRings(includeAnon);
+    
+    return sendResponse(res, 200, 'success', rings, null, 'Rings discovered successfully');
+  } catch (error) {
+    console.error('Error discovering rings:', error.message);
+    return sendResponse(res, 500, 'failure', null, 'Failed to discover rings', 'An error occurred while discovering rings', error.message);
+  }
+});
+
+// Get metadata for a specific ring
+app.get('/api/rings/:ringId/metadata', authenticate, async (req, res) => {
+  try {
+    const { ringId } = req.params;
+    const metadata = await getRingMetadata(ringId);
+    
+    if (!metadata) {
+      return sendResponse(res, 404, 'failure', null, 'Ring not found', `Ring ${ringId} not found in registry`);
+    }
+    
+    return sendResponse(res, 200, 'success', metadata, null, 'Ring metadata retrieved successfully');
+  } catch (error) {
+    console.error('Error getting ring metadata:', error.message);
+    return sendResponse(res, 500, 'failure', null, 'Failed to get ring metadata', 'An error occurred while retrieving ring metadata', error.message);
+  }
+});
+
+// Register/update ring in registry (requires owner or architect)
+app.post('/api/admin/rings/:ringId/register', requireAdminRole, async (req, res) => {
+  try {
+    const { ringId } = req.params;
+    const { publicName, capabilities } = req.body;
+    
+    const metadata = await registerRing(ringId, {
+      publicName,
+      capabilities: capabilities || ['key-management', 'token-management'],
+    });
+    
+    return sendResponse(res, 200, 'success', metadata, null, 'Ring registered successfully');
+  } catch (error) {
+    console.error('Error registering ring:', error.message);
+    return sendResponse(res, 500, 'failure', null, 'Failed to register ring', 'An error occurred while registering ring', error.message);
+  }
+});
+
+// Update ring metadata (requires owner or architect)
+app.put('/api/admin/rings/:ringId/metadata', requireAdminRole, async (req, res) => {
+  try {
+    const { ringId } = req.params;
+    const { publicName, capabilities } = req.body;
+    
+    const metadata = await updateRingMetadata(ringId, {
+      publicName,
+      capabilities,
+    });
+    
+    return sendResponse(res, 200, 'success', metadata, null, 'Ring metadata updated successfully');
+  } catch (error) {
+    console.error('Error updating ring metadata:', error.message);
+    return sendResponse(res, 500, 'failure', null, 'Failed to update ring metadata', 'An error occurred while updating ring metadata', error.message);
+  }
+});
+
+// Search rings by capability
+app.get('/api/rings/search', authenticate, async (req, res) => {
+  try {
+    const { capability } = req.query;
+    
+    if (!capability) {
+      return sendResponse(res, 400, 'failure', null, 'Missing required parameter', 'capability query parameter is required');
+    }
+    
+    const rings = await searchRingsByCapability(capability);
+    
+    return sendResponse(res, 200, 'success', rings, null, 'Rings found successfully');
+  } catch (error) {
+    console.error('Error searching rings:', error.message);
+    return sendResponse(res, 500, 'failure', null, 'Failed to search rings', 'An error occurred while searching rings', error.message);
+  }
+});
+
+// Get current user's ring
+app.get('/api/rings/my-ring', authenticate, async (req, res) => {
+  try {
+    const ringId = req.ringId;
+    
+    if (!ringId) {
+      return sendResponse(res, 404, 'failure', null, 'Ring not found', 'No ring associated with current authentication');
+    }
+    
+    const ring = await getRing(ringId);
+    const metadata = await getRingMetadata(ringId);
+    
+    return sendResponse(res, 200, 'success', {
+      ringId: ringId,
+      ring: ring,
+      metadata: metadata,
+    }, null, 'Ring retrieved successfully');
+  } catch (error) {
+    console.error('Error getting user ring:', error.message);
+    return sendResponse(res, 500, 'failure', null, 'Failed to get ring', 'An error occurred while retrieving ring', error.message);
+  }
+});
+
+// ========== Key Management Endpoints ==========
+
+// List all keys in a ring (content belongs to ring, accessible to all members)
+app.get('/api/rings/:ringId/keys', authenticate, async (req, res) => {
+  try {
+    const { ringId } = req.params;
+    const userEmail = req.userEmail;
+    
+    // Verify user has access to this ring
+    if (userEmail) {
+      const hasAccess = await hasRingAccess(userEmail, ringId);
+      if (!hasAccess) {
+        return sendResponse(res, 403, 'failure', null, 'Access denied', 'You do not have access to this ring');
+      }
+    }
+    
+    const keys = await listRingKeys(ringId);
+    
+    return sendResponse(res, 200, 'success', {
+      ringId,
+      keys,
+      count: keys.length,
+      message: 'All keys are accessible to all ring members'
+    }, null, 'Ring keys retrieved successfully');
+  } catch (error) {
+    console.error('Error listing ring keys:', error.message);
+    return sendResponse(res, 500, 'failure', null, 'Failed to list ring keys', 'An error occurred while listing ring keys', error.message);
+  }
+});
+
+// Copy a key from one ring to another
+app.post('/api/rings/:sourceRingId/keys/:keyName/copy', requireAdminRole, async (req, res) => {
+  try {
+    const { sourceRingId, keyName } = req.params;
+    const { targetRingId, newKeyName } = req.body;
+    
+    if (!targetRingId) {
+      return sendResponse(res, 400, 'failure', null, 'Missing required field', 'targetRingId is required');
+    }
+    
+    const result = await copyKeyBetweenRings(sourceRingId, targetRingId, keyName, newKeyName);
+    
+    return sendResponse(res, 200, 'success', result, null, 'Key copied successfully');
+  } catch (error) {
+    console.error('Error copying key:', error.message);
+    return sendResponse(res, 500, 'failure', null, 'Failed to copy key', 'An error occurred while copying key', error.message);
+  }
+});
+
+// Move a key from one ring to another
+app.post('/api/rings/:sourceRingId/keys/:keyName/move', requireAdminRole, async (req, res) => {
+  try {
+    const { sourceRingId, keyName } = req.params;
+    const { targetRingId, newKeyName } = req.body;
+    
+    if (!targetRingId) {
+      return sendResponse(res, 400, 'failure', null, 'Missing required field', 'targetRingId is required');
+    }
+    
+    const result = await moveKeyBetweenRings(sourceRingId, targetRingId, keyName, newKeyName);
+    
+    return sendResponse(res, 200, 'success', result, null, 'Key moved successfully');
+  } catch (error) {
+    console.error('Error moving key:', error.message);
+    return sendResponse(res, 500, 'failure', null, 'Failed to move key', 'An error occurred while moving key', error.message);
+  }
+});
+
+// Share a key within a ring (all members already have access, this is for tracking)
+app.post('/api/rings/:ringId/keys/:keyName/share', authenticate, async (req, res) => {
+  try {
+    const { ringId, keyName } = req.params;
+    const userEmail = req.userEmail;
+    
+    if (!userEmail) {
+      return sendResponse(res, 400, 'failure', null, 'Missing user email', 'User email is required for sharing');
+    }
+    
+    // Verify user has access to this ring
+    const hasAccess = await hasRingAccess(userEmail, ringId);
+    if (!hasAccess) {
+      return sendResponse(res, 403, 'failure', null, 'Access denied', 'You do not have access to this ring');
+    }
+    
+    const result = await shareKeyWithinRing(ringId, keyName, userEmail);
+    
+    return sendResponse(res, 200, 'success', result, null, 'Key sharing information updated');
+  } catch (error) {
+    console.error('Error sharing key:', error.message);
+    return sendResponse(res, 500, 'failure', null, 'Failed to share key', 'An error occurred while sharing key', error.message);
+  }
+});
+
+// Get key sharing information
+app.get('/api/rings/:ringId/keys/:keyName/share', authenticate, async (req, res) => {
+  try {
+    const { ringId, keyName } = req.params;
+    const userEmail = req.userEmail;
+    
+    // Verify user has access to this ring
+    if (userEmail) {
+      const hasAccess = await hasRingAccess(userEmail, ringId);
+      if (!hasAccess) {
+        return sendResponse(res, 403, 'failure', null, 'Access denied', 'You do not have access to this ring');
+      }
+    }
+    
+    const sharingInfo = await getKeySharingInfo(ringId, keyName);
+    
+    if (!sharingInfo) {
+      return sendResponse(res, 404, 'failure', null, 'Key not found', `Key ${keyName} not found in ring ${ringId}`);
+    }
+    
+    return sendResponse(res, 200, 'success', sharingInfo, null, 'Key sharing information retrieved successfully');
+  } catch (error) {
+    console.error('Error getting key sharing info:', error.message);
+    return sendResponse(res, 500, 'failure', null, 'Failed to get key sharing info', 'An error occurred while retrieving key sharing info', error.message);
+  }
+});
+
+// ========== Privacy Vault Endpoints (Personal/Sacred Secrets) ==========
+
+// Store a secret in a key's privacy vault (personal/sacred, not shared with ring)
+app.post('/api/rings/:ringId/keys/:keyName/vault', authenticate, async (req, res) => {
+  try {
+    const { ringId, keyName } = req.params;
+    const { vault_secret_name, vault_secret_value, master_key } = req.body;
+    const userEmail = req.userEmail;
+    
+    if (!userEmail) {
+      return sendResponse(res, 400, 'failure', null, 'Missing user email', 'User email is required');
+    }
+    
+    if (!vault_secret_name || vault_secret_value === undefined) {
+      return sendResponse(res, 400, 'failure', null, 'Missing required fields', 'vault_secret_name and vault_secret_value are required');
+    }
+    
+    // Verify user has access to this ring
+    const hasAccess = await hasRingAccess(userEmail, ringId);
+    if (!hasAccess) {
+      return sendResponse(res, 403, 'failure', null, 'Access denied', 'You do not have access to this ring');
+    }
+    
+    const result = await storeVaultSecret(
+      ringId,
+      keyName,
+      userEmail,
+      vault_secret_name,
+      vault_secret_value,
+      master_key
+    );
+    
+    return sendResponse(res, 200, 'success', result, null, 'Vault secret stored successfully. This secret is private to you and not shared with ring members.');
+  } catch (error) {
+    console.error('Error storing vault secret:', error.message);
+    return sendResponse(res, 500, 'failure', null, 'Failed to store vault secret', 'An error occurred while storing vault secret', error.message);
+  }
+});
+
+// Get a secret from a key's privacy vault
+app.get('/api/rings/:ringId/keys/:keyName/vault/:vaultSecretName', authenticate, async (req, res) => {
+  try {
+    const { ringId, keyName, vaultSecretName } = req.params;
+    const { master_key } = req.query;
+    const userEmail = req.userEmail;
+    
+    if (!userEmail) {
+      return sendResponse(res, 400, 'failure', null, 'Missing user email', 'User email is required');
+    }
+    
+    // Verify user has access to this ring
+    const hasAccess = await hasRingAccess(userEmail, ringId);
+    if (!hasAccess) {
+      return sendResponse(res, 403, 'failure', null, 'Access denied', 'You do not have access to this ring');
+    }
+    
+    const secretValue = await getVaultSecret(
+      ringId,
+      keyName,
+      userEmail,
+      vaultSecretName,
+      master_key
+    );
+    
+    if (secretValue === null) {
+      return sendResponse(res, 404, 'failure', null, 'Vault secret not found', `Vault secret ${vaultSecretName} not found`);
+    }
+    
+    return sendResponse(res, 200, 'success', {
+      ringId,
+      keyName,
+      vaultSecretName,
+      vaultSecretValue: secretValue,
+      private: true,
+      message: 'This is your personal vault secret, not shared with ring members'
+    }, null, 'Vault secret retrieved successfully');
+  } catch (error) {
+    console.error('Error getting vault secret:', error.message);
+    return sendResponse(res, 500, 'failure', null, 'Failed to get vault secret', 'An error occurred while retrieving vault secret', error.message);
+  }
+});
+
+// List all secrets in a user's vault for a specific key
+app.get('/api/rings/:ringId/keys/:keyName/vault', authenticate, async (req, res) => {
+  try {
+    const { ringId, keyName } = req.params;
+    const userEmail = req.userEmail;
+    
+    if (!userEmail) {
+      return sendResponse(res, 400, 'failure', null, 'Missing user email', 'User email is required');
+    }
+    
+    // Verify user has access to this ring
+    const hasAccess = await hasRingAccess(userEmail, ringId);
+    if (!hasAccess) {
+      return sendResponse(res, 403, 'failure', null, 'Access denied', 'You do not have access to this ring');
+    }
+    
+    const secrets = await listVaultSecrets(ringId, keyName, userEmail);
+    const metadata = await getVaultMetadata(ringId, keyName, userEmail);
+    
+    return sendResponse(res, 200, 'success', {
+      ringId,
+      keyName,
+      userId: userEmail,
+      vaultSecrets: secrets,
+      metadata: metadata,
+      message: 'These are your personal vault secrets, not shared with ring members'
+    }, null, 'Vault secrets listed successfully');
+  } catch (error) {
+    console.error('Error listing vault secrets:', error.message);
+    return sendResponse(res, 500, 'failure', null, 'Failed to list vault secrets', 'An error occurred while listing vault secrets', error.message);
+  }
+});
+
+// Delete a secret from a key's privacy vault
+app.delete('/api/rings/:ringId/keys/:keyName/vault/:vaultSecretName', authenticate, async (req, res) => {
+  try {
+    const { ringId, keyName, vaultSecretName } = req.params;
+    const userEmail = req.userEmail;
+    
+    if (!userEmail) {
+      return sendResponse(res, 400, 'failure', null, 'Missing user email', 'User email is required');
+    }
+    
+    // Verify user has access to this ring
+    const hasAccess = await hasRingAccess(userEmail, ringId);
+    if (!hasAccess) {
+      return sendResponse(res, 403, 'failure', null, 'Access denied', 'You do not have access to this ring');
+    }
+    
+    const success = await deleteVaultSecret(ringId, keyName, userEmail, vaultSecretName);
+    
+    return sendResponse(res, 200, 'success', {
+      ringId,
+      keyName,
+      vaultSecretName,
+      deleted: success
+    }, null, 'Vault secret deleted successfully');
+  } catch (error) {
+    console.error('Error deleting vault secret:', error.message);
+    return sendResponse(res, 500, 'failure', null, 'Failed to delete vault secret', 'An error occurred while deleting vault secret', error.message);
+  }
+});
+
+// Check if a user has a vault for a specific key
+app.get('/api/rings/:ringId/keys/:keyName/vault/exists', authenticate, async (req, res) => {
+  try {
+    const { ringId, keyName } = req.params;
+    const userEmail = req.userEmail;
+    
+    if (!userEmail) {
+      return sendResponse(res, 400, 'failure', null, 'Missing user email', 'User email is required');
+    }
+    
+    // Verify user has access to this ring
+    const hasAccess = await hasRingAccess(userEmail, ringId);
+    if (!hasAccess) {
+      return sendResponse(res, 403, 'failure', null, 'Access denied', 'You do not have access to this ring');
+    }
+    
+    const vaultExists = await hasVault(ringId, keyName, userEmail);
+    const metadata = vaultExists ? await getVaultMetadata(ringId, keyName, userEmail) : null;
+    
+    return sendResponse(res, 200, 'success', {
+      ringId,
+      keyName,
+      userId: userEmail,
+      hasVault: vaultExists,
+      metadata: metadata
+    }, null, 'Vault existence checked successfully');
+  } catch (error) {
+    console.error('Error checking vault existence:', error.message);
+    return sendResponse(res, 500, 'failure', null, 'Failed to check vault existence', 'An error occurred while checking vault existence', error.message);
   }
 });
 
@@ -2490,6 +3473,22 @@ app.use((req, res, next) => {
   }
 });
 
+// OAuth callback route (must be before static file serving)
+app.get('/oauth2callback', (req, res) => {
+  const code = req.query.code;
+  const error = req.query.error;
+  
+  if (error) {
+    return res.redirect(`/role-management.html?error=${encodeURIComponent(error)}`);
+  }
+  
+  if (code) {
+    return res.redirect(`/role-management.html?code=${code}`);
+  }
+  
+  res.redirect('/role-management.html');
+});
+
 // Serve static files (including React Router app)
 app.use(express.static(path.join(__dirname, 'public'), {
   index: 'index.html',
@@ -2502,7 +3501,9 @@ app.get('*', (req, res, next) => {
   if (req.path.startsWith('/api') || 
       req.path.startsWith('/mcp-config-generator') || 
       req.path.startsWith('/generate-token') ||
-      req.path.startsWith('/rebuild')) {
+      req.path.startsWith('/rebuild') ||
+      req.path === '/role-management.html' ||
+      req.path.endsWith('.html')) {
     return next();
   }
   // Serve React app index.html for all other routes (client-side routing)
@@ -2520,8 +3521,8 @@ app.use((error, req, res, next) => {
 });
 
 // Start server
-app.listen(PORT, () => {
-  console.log(`🚀 MyKeys API Service running on port ${PORT}`);
+app.listen(FINAL_PORT, () => {
+  console.log(`🚀 MyKeys API Service running on port ${FINAL_PORT}`);
   console.log(`📦 Project: ${PROJECT_ID}`);
   console.log(`🔐 Authentication: Basic Auth + Bearer Token`);
   console.log(`📚 Available endpoints:`);
