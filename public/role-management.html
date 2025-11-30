@@ -423,8 +423,8 @@
                 
                 <div id="googleUserInfo" style="display: none; padding: 15px; background: #e8f5e9; border-radius: 6px; margin-bottom: 15px;">
                     <div style="display: flex; align-items: center; gap: 10px;">
-                        <div style="width: 40px; height: 40px; border-radius: 50%; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); display: flex; align-items: center; justify-content: center; color: white; font-weight: 600; font-size: 18px;">
-                            {googleUserInfo.email ? googleUserInfo.email.charAt(0).toUpperCase() : 'U'}
+                        <div id="userInitial" style="width: 40px; height: 40px; border-radius: 50%; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); display: flex; align-items: center; justify-content: center; color: white; font-weight: 600; font-size: 18px;">
+                            U
                         </div>
                         <div>
                             <div style="font-weight: 600; color: #333;">Signed in as:</div>
@@ -591,13 +591,13 @@
                             const redirectUri = `http://localhost:${currentPort}/oauth2callback`;
                             errorMessage = `Google OAuth is not configured for localhost.\n\nTo fix:\n1. Add Google OAuth credentials to .env.local:\n   GOOGLE_OAUTH_CLIENT_ID=your-client-id\n   GOOGLE_OAUTH_CLIENT_SECRET=your-secret\n   GOOGLE_OAUTH_REDIRECT_URI=${redirectUri}\n\n2. Follow setup instructions in GOOGLE_OAUTH_SETUP.md\n\n3. Restart the server (npm start)\n\n4. Check server terminal - should NOT see OAuth warning`;
                         } else {
-                            errorMessage = 'Google OAuth is not configured. Please configure Google OAuth credentials in Vercel environment variables.';
+                            errorMessage = 'Google OAuth is not configured. Please contact your administrator to configure Google OAuth credentials.';
                         }
                     } else if (err.message && err.message.includes('404')) {
                         if (API_BASE.includes('localhost')) {
                             errorMessage = 'Google OAuth endpoint not found. Make sure:\n1. The Express server is running (npm start)\n2. Google OAuth credentials are set in .env.local\n3. The server is running on http://localhost:8080';
                         } else {
-                            errorMessage = 'Google OAuth endpoint not found. The endpoint may not be deployed yet. Please check Vercel deployment and ensure Google OAuth credentials are configured.';
+                            errorMessage = 'Google OAuth endpoint not found. The service may not be available yet. Please contact your administrator.';
                         }
                     } else if (err.message && err.message.includes('Failed to fetch')) {
                         if (API_BASE.includes('localhost')) {
@@ -720,6 +720,12 @@
                 const userEmailDisplay = document.getElementById('userEmailDisplay');
                 if (userEmailDisplay) {
                     userEmailDisplay.textContent = googleUserInfo.email;
+                }
+                
+                // Update user initial
+                const userInitial = document.getElementById('userInitial');
+                if (userInitial && googleUserInfo.email) {
+                    userInitial.textContent = googleUserInfo.email.charAt(0).toUpperCase();
                 }
                 
                 // Auto-populate the email input field in the form

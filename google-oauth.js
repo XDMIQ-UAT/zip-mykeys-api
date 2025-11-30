@@ -23,11 +23,33 @@ function initializeGoogleOAuth() {
   
   if (!clientId || !clientSecret) {
     console.warn('[google-oauth] Google OAuth credentials not configured. OAuth will be disabled.');
+    console.warn('[google-oauth] Environment check:', {
+      hasClientId: !!clientId,
+      hasClientSecret: !!clientSecret,
+      vercelEnv: process.env.VERCEL_ENV,
+      nodeEnv: process.env.NODE_ENV,
+      redirectUri: redirectUri
+    });
     return null;
   }
   
   oauth2Client = new OAuth2Client(clientId, clientSecret, redirectUri);
+  console.log('[google-oauth] Google OAuth initialized successfully');
   return oauth2Client;
+}
+
+// Lazy initialization helper - tries to initialize if not already done
+function ensureInitialized() {
+  if (!oauth2Client) {
+    const clientId = process.env.GOOGLE_OAUTH_CLIENT_ID;
+    const clientSecret = process.env.GOOGLE_OAUTH_CLIENT_SECRET;
+    
+    if (clientId && clientSecret) {
+      console.log('[google-oauth] Lazy initializing OAuth client (env vars now available)');
+      initializeGoogleOAuth();
+    }
+  }
+  return oauth2Client !== null;
 }
 
 // Initialize on module load
@@ -38,6 +60,7 @@ initializeGoogleOAuth();
  * @returns {string} Authorization URL
  */
 function getAuthUrl() {
+  ensureInitialized();
   if (!oauth2Client) {
     throw new Error('Google OAuth not configured');
   }
@@ -60,6 +83,7 @@ function getAuthUrl() {
  * @returns {Promise<{email: string, name: string, picture: string}>}
  */
 async function verifyGoogleToken(code) {
+  ensureInitialized();
   if (!oauth2Client) {
     throw new Error('Google OAuth not configured');
   }
@@ -96,6 +120,7 @@ async function verifyGoogleToken(code) {
  * @returns {Promise<{email: string, name: string, picture: string}>}
  */
 async function verifyIdToken(idToken) {
+  ensureInitialized();
   if (!oauth2Client) {
     throw new Error('Google OAuth not configured');
   }
@@ -120,11 +145,31 @@ async function verifyIdToken(idToken) {
   }
 }
 
+/**
+ * Check if Google OAuth is configured
+ * Checks environment variables at runtime, not just module initialization
+ * @returns {boolean}
+ */
+function isConfigured() {
+  // First try lazy initialization
+  ensureInitialized();
+  
+  // Check if client is initialized
+  if (oauth2Client !== null) {
+    return true;
+  }
+  
+  // Also check env vars directly as fallback
+  const clientId = process.env.GOOGLE_OAUTH_CLIENT_ID;
+  const clientSecret = process.env.GOOGLE_OAUTH_CLIENT_SECRET;
+  return !!(clientId && clientSecret);
+}
+
 module.exports = {
   getAuthUrl,
   verifyGoogleToken,
   verifyIdToken,
   initializeGoogleOAuth,
-  isConfigured: () => oauth2Client !== null
+  isConfigured
 };
 
