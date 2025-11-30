@@ -463,14 +463,21 @@ try {
                     }
                 }
                 
-                // Use viewport-based positioning to break out of all constraints
+                // Use absolute positioning to break out of all constraints
                 const viewportWidth = window.innerWidth || document.documentElement.clientWidth;
+                const bodyRect = document.body.getBoundingClientRect();
+                const headerRect = insertedHeader.getBoundingClientRect();
+                
+                // Calculate offset from viewport
+                const leftOffset = -headerRect.left;
+                const rightOffset = viewportWidth - headerRect.right;
+                
                 insertedHeader.style.cssText = `
                     position: relative !important;
                     width: ${viewportWidth}px !important;
-                    max-width: 100vw !important;
-                    margin-left: calc(50% - 50vw) !important;
-                    margin-right: calc(50% - 50vw) !important;
+                    max-width: ${viewportWidth}px !important;
+                    margin-left: ${leftOffset}px !important;
+                    margin-right: ${rightOffset}px !important;
                     padding: 0 !important;
                     left: 0 !important;
                     right: 0 !important;
@@ -492,14 +499,20 @@ try {
                 document.body.appendChild(insertedFooter);
             }
             
-            // Use viewport-based positioning to break out of all constraints
+            // Use absolute positioning to break out of all constraints
             const viewportWidth = window.innerWidth || document.documentElement.clientWidth;
+            const footerRect = insertedFooter.getBoundingClientRect();
+            
+            // Calculate offset from viewport
+            const leftOffset = -footerRect.left;
+            const rightOffset = viewportWidth - footerRect.right;
+            
             insertedFooter.style.cssText = `
                 position: relative !important;
                 width: ${viewportWidth}px !important;
-                max-width: 100vw !important;
-                margin-left: calc(50% - 50vw) !important;
-                margin-right: calc(50% - 50vw) !important;
+                max-width: ${viewportWidth}px !important;
+                margin-left: ${leftOffset}px !important;
+                margin-right: ${rightOffset}px !important;
                 padding: 60px 0 30px !important;
                 left: 0 !important;
                 right: 0 !important;
@@ -524,42 +537,23 @@ try {
                     return;
                 }
                 
-                // Method 1: Use calc() trick to break out of containers
                 const viewportWidth = window.innerWidth || document.documentElement.clientWidth;
+                const rect = element.getBoundingClientRect();
                 
-                // CRITICAL: Use viewport width directly with calc margins
-                element.style.cssText += `
-                    margin-left: calc(50% - 50vw) !important;
-                    margin-right: calc(50% - 50vw) !important;
-                    width: 100vw !important;
-                    max-width: 100vw !important;
-                    position: relative !important;
-                    box-sizing: border-box !important;
-                    padding-left: 0 !important;
-                    padding-right: 0 !important;
-                `.replace(/\s+/g, ' ').trim();
+                // Calculate exact offsets needed
+                const leftOffset = -rect.left;
+                const rightOffset = viewportWidth - rect.right;
+                const totalWidth = viewportWidth + leftOffset + rightOffset;
                 
-                // Method 2: Also set as pixel value as fallback
-                element.style.width = viewportWidth + 'px';
-                element.style.maxWidth = viewportWidth + 'px';
-                
-                // Method 3: Use negative margins if still constrained
-                setTimeout(() => {
-                    const rect = element.getBoundingClientRect();
-                    const bodyRect = document.body.getBoundingClientRect();
-                    const viewportWidth2 = window.innerWidth || document.documentElement.clientWidth;
-                    
-                    if (rect.left !== 0 || Math.abs(rect.right - viewportWidth2) > 1) {
-                        const leftOffset = -rect.left;
-                        const rightOffset = viewportWidth2 - rect.right;
-                        if (leftOffset !== 0 || rightOffset !== 0) {
-                            element.style.marginLeft = leftOffset + 'px';
-                            element.style.marginRight = rightOffset + 'px';
-                            element.style.width = (viewportWidth2 + leftOffset + rightOffset) + 'px';
-                            element.style.maxWidth = (viewportWidth2 + leftOffset + rightOffset) + 'px';
-                        }
-                    }
-                }, 0);
+                // Apply calculated margins and width
+                element.style.marginLeft = leftOffset + 'px';
+                element.style.marginRight = rightOffset + 'px';
+                element.style.width = totalWidth + 'px';
+                element.style.maxWidth = totalWidth + 'px';
+                element.style.position = 'relative';
+                element.style.boxSizing = 'border-box';
+                element.style.paddingLeft = '0';
+                element.style.paddingRight = '0';
             };
             
             // Apply immediately and after layout
