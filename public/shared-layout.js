@@ -5,12 +5,32 @@
  * Usage: <script src="/shared-layout.js"></script>
  */
 
-console.log('=== shared-layout.js STARTING ===');
+// Force execution indicator
+try {
+    console.log('=== shared-layout.js STARTING ===');
+    if (typeof window !== 'undefined') {
+        window.__sharedLayoutLoaded = true;
+        document.addEventListener('DOMContentLoaded', function() {
+            const indicator = document.createElement('div');
+            indicator.id = 'shared-layout-debug';
+            indicator.style.cssText = 'position:fixed;top:10px;right:10px;background:red;color:white;padding:10px;z-index:99999;font-size:12px;';
+            indicator.textContent = 'shared-layout.js LOADED';
+            document.body.appendChild(indicator);
+            setTimeout(() => indicator.remove(), 3000);
+        });
+    }
+} catch(e) {
+    alert('shared-layout.js ERROR: ' + e.message);
+}
 
 (function() {
     'use strict';
     
-    console.log('=== shared-layout.js IIFE EXECUTING ===');
+    try {
+        console.log('=== shared-layout.js IIFE EXECUTING ===');
+    } catch(e) {
+        alert('IIFE LOG ERROR: ' + e.message);
+    }
     
     const headerHTML = `
         <header class="header" style="width: 100%; margin: 0; padding: 0; position: relative; left: 0; right: 0;">
@@ -500,42 +520,46 @@ console.log('=== shared-layout.js STARTING ===');
             
             // Use multiple approaches to ensure full width
             const ensureFullWidth = (element, name) => {
-                console.log(`ensureFullWidth called for ${name}:`, !!element);
                 if (!element) {
-                    console.warn(`${name} element not found!`);
                     return;
                 }
                 
                 // Method 1: Use calc() trick to break out of containers
                 const viewportWidth = window.innerWidth || document.documentElement.clientWidth;
-                element.style.marginLeft = 'calc(50% - 50vw)';
-                element.style.marginRight = 'calc(50% - 50vw)';
-                element.style.width = '100vw';
-                element.style.maxWidth = '100vw';
+                
+                // CRITICAL: Use viewport width directly with calc margins
+                element.style.cssText += `
+                    margin-left: calc(50% - 50vw) !important;
+                    margin-right: calc(50% - 50vw) !important;
+                    width: 100vw !important;
+                    max-width: 100vw !important;
+                    position: relative !important;
+                    box-sizing: border-box !important;
+                    padding-left: 0 !important;
+                    padding-right: 0 !important;
+                `.replace(/\s+/g, ' ').trim();
                 
                 // Method 2: Also set as pixel value as fallback
                 element.style.width = viewportWidth + 'px';
+                element.style.maxWidth = viewportWidth + 'px';
                 
                 // Method 3: Use negative margins if still constrained
-                const rect = element.getBoundingClientRect();
-                const bodyRect = document.body.getBoundingClientRect();
-                if (rect.left !== 0 || Math.abs(rect.right - bodyRect.width) > 1) {
-                    const leftOffset = -rect.left;
-                    const rightOffset = bodyRect.width - rect.right;
-                    if (leftOffset !== 0 || rightOffset !== 0) {
-                        element.style.marginLeft = leftOffset + 'px';
-                        element.style.marginRight = rightOffset + 'px';
-                        element.style.width = (viewportWidth + leftOffset + rightOffset) + 'px';
+                setTimeout(() => {
+                    const rect = element.getBoundingClientRect();
+                    const bodyRect = document.body.getBoundingClientRect();
+                    const viewportWidth2 = window.innerWidth || document.documentElement.clientWidth;
+                    
+                    if (rect.left !== 0 || Math.abs(rect.right - viewportWidth2) > 1) {
+                        const leftOffset = -rect.left;
+                        const rightOffset = viewportWidth2 - rect.right;
+                        if (leftOffset !== 0 || rightOffset !== 0) {
+                            element.style.marginLeft = leftOffset + 'px';
+                            element.style.marginRight = rightOffset + 'px';
+                            element.style.width = (viewportWidth2 + leftOffset + rightOffset) + 'px';
+                            element.style.maxWidth = (viewportWidth2 + leftOffset + rightOffset) + 'px';
+                        }
                     }
-                }
-                
-                // Force other properties
-                element.style.position = 'relative';
-                element.style.boxSizing = 'border-box';
-                element.style.paddingLeft = '0';
-                element.style.paddingRight = '0';
-                
-                console.log(`${name} width:`, element.offsetWidth, 'viewport:', viewportWidth, 'rect.left:`, rect.left, 'rect.right:`, rect.right, 'body.width:`, bodyRect.width);
+                }, 0);
             };
             
             // Apply immediately and after layout
