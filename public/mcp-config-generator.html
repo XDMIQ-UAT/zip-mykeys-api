@@ -72,6 +72,8 @@
         }
         
         body.has-shared-layout .footer-content {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
             gap: 20px;
             margin-bottom: 15px;
         }
@@ -84,12 +86,27 @@
         body.has-shared-layout .footer-section h4 {
             margin-bottom: 8px;
             font-size: 16px;
+            color: white;
         }
         
-        body.has-shared-layout .footer-section p,
-        body.has-shared-layout .footer-section a {
+        body.has-shared-layout .footer-section p {
+            color: rgba(255, 255, 255, 0.8);
+            line-height: 1.6;
             font-size: 13px;
             margin-bottom: 4px;
+        }
+        
+        body.has-shared-layout .footer-section a {
+            display: block;
+            color: rgba(255, 255, 255, 0.7);
+            text-decoration: none;
+            transition: color 0.2s;
+            font-size: 13px;
+            margin-bottom: 4px;
+        }
+        
+        body.has-shared-layout .footer-section a:hover {
+            color: white;
         }
         
         body.has-shared-layout .footer-bottom {
