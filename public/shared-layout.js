@@ -251,13 +251,16 @@
     `;
     
     function initSharedLayout() {
+        console.log('initSharedLayout called');
         // Add styles if not already added
         if (!document.getElementById('shared-header-footer-styles')) {
             document.head.insertAdjacentHTML('beforeend', headerStyles);
+            console.log('Header/footer styles added');
         }
         
         // Add body class for layout
         document.body.classList.add('has-shared-layout');
+        console.log('Body class added');
         
         // Find insertion points
         const headerPlaceholder = document.getElementById('shared-header');
@@ -362,6 +365,7 @@
         
         // Double-check: Ensure footer is not inside any container after insertion
         const insertedFooter = document.querySelector('.footer');
+        console.log('Footer found:', !!insertedFooter, insertedFooter ? insertedFooter.parentElement : 'none');
         if (insertedFooter) {
             let currentParent = insertedFooter.parentElement;
             let moved = false;
@@ -492,7 +496,11 @@
             
             // Use multiple approaches to ensure full width
             const ensureFullWidth = (element, name) => {
-                if (!element) return;
+                console.log(`ensureFullWidth called for ${name}:`, !!element);
+                if (!element) {
+                    console.warn(`${name} element not found!`);
+                    return;
+                }
                 
                 // Method 1: Use calc() trick to break out of containers
                 const viewportWidth = window.innerWidth || document.documentElement.clientWidth;
@@ -527,18 +535,36 @@
             };
             
             // Apply immediately and after layout
-            ensureFullWidth(insertedHeader, 'Header');
-            ensureFullWidth(insertedFooter, 'Footer');
+            console.log('About to call ensureFullWidth for Header:', !!insertedHeader);
+            console.log('About to call ensureFullWidth for Footer:', !!insertedFooter);
+            
+            if (insertedHeader) {
+                ensureFullWidth(insertedHeader, 'Header');
+            } else {
+                console.error('Header element not found when trying to ensure full width!');
+            }
+            
+            if (insertedFooter) {
+                ensureFullWidth(insertedFooter, 'Footer');
+            } else {
+                console.error('Footer element not found when trying to ensure full width!');
+            }
             
             requestAnimationFrame(() => {
-                ensureFullWidth(insertedHeader, 'Header (after RAF)');
-                ensureFullWidth(insertedFooter, 'Footer (after RAF)');
+                const header = document.querySelector('.header');
+                const footer = document.querySelector('.footer');
+                console.log('After RAF - Header:', !!header, 'Footer:', !!footer);
+                if (header) ensureFullWidth(header, 'Header (after RAF)');
+                if (footer) ensureFullWidth(footer, 'Footer (after RAF)');
             });
             
             // Also try after a short delay
             setTimeout(() => {
-                ensureFullWidth(insertedHeader, 'Header (after delay)');
-                ensureFullWidth(insertedFooter, 'Footer (after delay)');
+                const header = document.querySelector('.header');
+                const footer = document.querySelector('.footer');
+                console.log('After delay - Header:', !!header, 'Footer:', !!footer);
+                if (header) ensureFullWidth(header, 'Header (after delay)');
+                if (footer) ensureFullWidth(footer, 'Footer (after delay)');
             }, 100);
         }
     }
