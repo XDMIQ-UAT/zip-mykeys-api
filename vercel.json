@@ -8,6 +8,14 @@
   ],
   "routes": [
     {
+      "src": "/mcp-config-generator.html",
+      "dest": "/server.js"
+    },
+    {
+      "src": "/generate-token.html",
+      "dest": "/server.js"
+    },
+    {
       "src": "/(.*)",
       "dest": "/server.js"
     }
