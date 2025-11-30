@@ -762,9 +762,16 @@
                     // Token generated immediately (CLI/web sync)
                     generatedToken = data.token;
                     
-                    // Clear any previous error state and show success
-                    tokenResult.classList.remove('error', 'show');
+                    // COMPLETELY clear any previous state before showing success
+                    tokenResult.classList.remove('error', 'success', 'show');
                     tokenResult.classList.add('success');
+                    
+                    // Clear all content first
+                    resultTitle.textContent = '';
+                    resultMessage.textContent = '';
+                    tokenDisplay.innerHTML = '';
+                    
+                    // Now set success content
                     resultTitle.textContent = '✅ Token Generated Successfully!';
                     resultMessage.innerHTML = `
                         <strong>Important:</strong> Save this token now - it will not be shown again!<br>
@@ -786,15 +793,23 @@
                     document.getElementById('step2').style.display = 'none';
                     updateStepIndicator(2, 2, 'Token Generated');
                 } else {
-                    throw new Error(data.error || data.message || 'Failed to generate token');
+                    // Ensure we have a proper error message
+                    const errorMsg = data.error || data.message || 'Failed to generate token';
+                    throw new Error(errorMsg);
                 }
             } catch (error) {
-                // Clear any previous success state and show error
-                tokenResult.classList.remove('success', 'show');
+                // COMPLETELY clear any previous state before showing error
+                tokenResult.classList.remove('success', 'error', 'show');
                 tokenResult.classList.add('error');
+                
+                // Clear all content first
+                resultTitle.textContent = '';
+                resultMessage.textContent = '';
+                tokenDisplay.innerHTML = '';
+                
+                // Now set error content
                 resultTitle.textContent = '❌ Verification Failed';
                 resultMessage.textContent = error.message || 'The verification code is incorrect or token generation failed. Please try again.';
-                tokenDisplay.innerHTML = '';
                 
                 // Hide copy button when there's an error (no token to copy)
                 const copyBtn = document.getElementById('copyBtn');
