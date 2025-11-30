@@ -921,55 +921,8 @@ app.get('/api/v1/secrets/:ecosystem', authenticate, async (req, res) => {
     // GCP removed - using Redis only
     let ecosystemSecrets = [];
     // GCP Secret Manager removed - using Vercel KV (Redis) exclusively
-        
-        // Filter secrets by ring and ecosystem
-        // SECURITY: Strictly enforce ring isolation - only show secrets from user's ring
-        ecosystemSecrets = secrets
-          .filter(secret => {
-            const name = secret.name.split('/').pop();
-            const labels = secret.labels || {};
-            const secretRingId = labels.ringId || (name.startsWith('ring-') ? name.split('-')[1] : null);
-            
-            // SECURITY FIX: If user has a ringId, ONLY show secrets from that ring
-            // If user doesn't have a ringId (basic auth admin), only show secrets without ringId labels
-            if (ringId) {
-              // User has a ring - only show secrets from their ring
-              if (secretRingId !== ringId) {
-                return false;
-              }
-              
-              // Check visibility for ring-scoped keys
-              if (userEmail) {
-                const keyName = name.replace(`${ecosystem}-`, '').replace(/^ring-[^-]+-/, '');
-                // Note: GCP secrets visibility check would need to be done separately
-                // For now, include them if they're in the visibleKeys list
-                if (!visibleKeys.includes(keyName)) {
-                  return false;
-                }
-              }
-            } else {
-              // Basic auth admin - only show secrets without ring labels (legacy/unscoped secrets)
-              if (secretRingId) {
-                return false; // Don't show ring-scoped secrets to admin
-              }
-            }
-            
-            // Filter by ecosystem name
-            return name.startsWith(`${ecosystem}-`) || labels.ecosystem === ecosystem;
-          })
-          .map(secret => ({
-            secret_name: secret.name.split('/').pop().replace(`${ecosystem}-`, '').replace(/^ring-[^-]+-/, ''),
-            ecosystem: ecosystem,
-            ringId: secret.labels?.ringId || null,
-            created: secret.createTime,
-            labels: secret.labels || {}
-          }));
-      } catch (gcpError) {
-        console.warn('Error listing secrets from GCP:', gcpError.message);
-      }
-    }
     
-    // Combine ring keys and GCP secrets
+    // Combine ring keys (no GCP secrets to combine)
     const allSecrets = [...visibleKeys.map(key => ({
       secret_name: key,
       ecosystem: ecosystem,
