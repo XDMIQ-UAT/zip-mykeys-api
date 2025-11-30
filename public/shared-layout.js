@@ -64,12 +64,18 @@
             position: sticky;
             top: 0;
             z-index: 100;
+            width: 100%;
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
         }
         
         .header .container {
             max-width: 1200px;
             margin: 0 auto;
             padding: 0 20px;
+            width: 100%;
+            box-sizing: border-box;
         }
         
         .nav {
@@ -124,12 +130,18 @@
             color: white;
             margin-top: auto;
             padding: 60px 0 30px;
+            width: 100%;
+            margin-left: 0;
+            margin-right: 0;
+            box-sizing: border-box;
         }
         
         .footer .container {
             max-width: 1200px;
             margin: 0 auto;
             padding: 0 20px;
+            width: 100%;
+            box-sizing: border-box;
         }
         
         .footer-content {
