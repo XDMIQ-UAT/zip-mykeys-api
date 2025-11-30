@@ -18,10 +18,21 @@
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             min-height: 100vh;
+            padding: 20px;
+        }
+        
+        /* When shared layout is active, body uses flex column */
+        body.has-shared-layout {
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .main-content {
+            flex: 1;
             display: flex;
             align-items: center;
             justify-content: center;
-            padding: 20px;
+            padding: 20px 0;
         }
         
         .container {
@@ -331,6 +342,7 @@
             <div class="info-box" style="background: #d4edda; border-left-color: #28a745;">
                 <p><strong>✓ Verification code sent!</strong></p>
                 <p id="codeSentMessage">Check your <span id="codeMethod">email</span> for the 4-digit code.</p>
+                <p style="margin-top: 8px; font-size: 12px; color: #155724;"><strong>⚠️ Important:</strong> If you request a new code, only the most recent code will work. Previous codes are invalidated.</p>
             </div>
             
             <form id="mfaVerifyForm">
@@ -646,8 +658,15 @@
         }
         
         // Step 1: Request MFA code
+        let isRequestingCode = false; // Prevent multiple simultaneous requests
         mfaRequestForm.addEventListener('submit', async (e) => {
             e.preventDefault();
+            
+            // Prevent multiple simultaneous requests
+            if (isRequestingCode) {
+                console.log('[request-mfa-code] Request already in progress, ignoring duplicate request');
+                return;
+            }
             
             const email = document.getElementById('email').value.trim();
             
@@ -656,6 +675,7 @@
                 return;
             }
             
+            isRequestingCode = true;
             requestCodeBtn.disabled = true;
             loading.classList.add('show');
             
@@ -694,16 +714,20 @@
             } catch (error) {
                 // COMPLETELY clear any previous state before showing error
                 tokenResult.classList.remove('success', 'error', 'show');
-                tokenResult.classList.add('error');
                 
-                // Clear all content first
-                resultTitle.textContent = '';
-                resultMessage.textContent = '';
-                tokenDisplay.innerHTML = '';
-                
-                // Now set error content
-                resultTitle.textContent = '❌ Failed to Send Code';
-                resultMessage.textContent = error.message || 'Failed to send verification code. Please try again.';
+                // Clear all content first - clear both textContent and innerHTML to ensure complete removal
+                if (resultTitle) {
+                    resultTitle.textContent = '';
+                    resultTitle.innerHTML = '';
+                }
+                if (resultMessage) {
+                    resultMessage.textContent = '';
+                    resultMessage.innerHTML = '';
+                }
+                if (tokenDisplay) {
+                    tokenDisplay.innerHTML = '';
+                    tokenDisplay.textContent = '';
+                }
                 
                 // Hide copy button when there's an error (no token to copy)
                 const copyBtn = document.getElementById('copyBtn');
@@ -711,10 +735,20 @@
                     copyBtn.style.display = 'none';
                 }
                 
+                // Now set error content AFTER clearing everything
+                tokenResult.classList.add('error');
+                if (resultTitle) {
+                    resultTitle.textContent = '❌ Failed to Send Code';
+                }
+                if (resultMessage) {
+                    resultMessage.textContent = error.message || 'Failed to send verification code. Please try again.';
+                }
+                
                 tokenResult.classList.add('show');
             } finally {
                 loading.classList.remove('show');
                 requestCodeBtn.disabled = false;
+                isRequestingCode = false;
             }
         });
         
@@ -722,7 +756,7 @@
         mfaVerifyForm.addEventListener('submit', async (e) => {
             e.preventDefault();
             
-            const mfaCode = document.getElementById('mfaCode').value.trim();
+            const mfaCode = document.getElementById('mfaCode').value.trim().replace(/\D/g, '');
             const clientId = document.getElementById('clientId').value.trim();
             const clientType = document.getElementById('clientType').value || 'generic';
             const expiresInDaysInput = document.getElementById('expiresInDays');
@@ -765,28 +799,62 @@
                 
                 const data = await response.json();
                 
-                if (response.ok && data.success && data.token) {
-                    // Token generated immediately (CLI/web sync)
-                    generatedToken = data.token;
-                    
-                    // COMPLETELY clear any previous state before showing success
-                    tokenResult.classList.remove('error', 'success', 'show');
-                    tokenResult.classList.add('success');
-                    
-                    // Clear all content first
+                // Log the API response for debugging
+                console.log('[verify-mfa-code] API response:', { ok: response.ok, status: response.status, data });
+                
+                // First, clear any previous state before processing response
+                tokenResult.classList.remove('error', 'success', 'show');
+                if (resultTitle) {
                     resultTitle.textContent = '';
+                    resultTitle.innerHTML = '';
+                }
+                if (resultMessage) {
                     resultMessage.textContent = '';
+                    resultMessage.innerHTML = '';
+                }
+                if (tokenDisplay) {
                     tokenDisplay.innerHTML = '';
+                    tokenDisplay.textContent = '';
+                }
+                
+                // Check for success condition - API returns status: 'success' and token in data.data
+                // Must have: ok status, success status, and token
+                const hasToken = (data.data && data.data.token) || data.token;
+                const isSuccess = data.status === 'success' || data.success === true;
+                
+                console.log('[verify-mfa-code] Success check:', { 
+                    responseOk: response.ok, 
+                    isSuccess, 
+                    hasToken,
+                    dataStatus: data.status,
+                    dataSuccess: data.success,
+                    tokenInData: !!data.data?.token,
+                    tokenDirect: !!data.token
+                });
+                
+                if (response.ok && isSuccess && hasToken) {
+                    // Token generated successfully
+                    // Token might be in data.data.token or data.token
+                    generatedToken = data.data?.token || data.token;
                     
-                    // Now set success content
-                    resultTitle.textContent = '✅ Token Generated Successfully!';
-                    resultMessage.innerHTML = `
-                        <strong>Important:</strong> Save this token now - it will not be shown again!<br>
-                        Expires: ${data.expiresAt ? new Date(data.expiresAt).toLocaleDateString() : 'N/A'}
-                    `;
-                    tokenDisplay.innerHTML = `
-                        <div class="token-value">${data.token}</div>
-                    `;
+                    // Set success content
+                    tokenResult.classList.add('success');
+                    if (resultTitle) {
+                        resultTitle.textContent = '✅ Token Generated Successfully!';
+                    }
+                    if (resultMessage) {
+                        const expiresAt = data.data?.expiresAt || data.expiresAt;
+                        resultMessage.innerHTML = `
+                            <strong>Important:</strong> Save this token now - it will not be shown again!<br>
+                            Expires: ${expiresAt ? new Date(expiresAt).toLocaleDateString() : 'N/A'}
+                        `;
+                    }
+                    if (tokenDisplay) {
+                        const tokenToDisplay = data.data?.token || data.token;
+                        tokenDisplay.innerHTML = `
+                            <div class="token-value">${tokenToDisplay}</div>
+                        `;
+                    }
                     
                     // Show copy button only when token is available
                     const copyBtn = document.getElementById('copyBtn');
@@ -800,23 +868,52 @@
                     document.getElementById('step2').style.display = 'none';
                     updateStepIndicator(2, 2, 'Token Generated');
                 } else {
-                    // Ensure we have a proper error message
-                    const errorMsg = data.error || data.message || 'Failed to generate token';
+                    // Handle error - ensure we have a clean error message
+                    let errorMsg = 'The verification code is incorrect or token generation failed. Please try again.';
+                    
+                    // Log the API response data to see what we're getting
+                    console.log('[verify-mfa-code] API error response - data.message:', data.message);
+                    console.log('[verify-mfa-code] API error response - data.error:', data.error);
+                    console.log('[verify-mfa-code] API error response - full data:', JSON.stringify(data));
+                    
+                    // Only use API error message if it doesn't contain success-related text
+                    // Prefer message over error as it contains more details (like "Expected: XXXX, Got: YYYY")
+                    if (data.message || data.error) {
+                        const apiErrorMsg = (data.message || data.error).toString();
+                        console.log('[verify-mfa-code] Extracted API error message:', apiErrorMsg);
+                        // Filter out any success-related text that might be in the error
+                        if (!apiErrorMsg.toLowerCase().includes('token generated successfully') &&
+                            !apiErrorMsg.toLowerCase().includes('save this token')) {
+                            errorMsg = apiErrorMsg;
+                            console.log('[verify-mfa-code] Using API error message:', errorMsg);
+                        } else {
+                            console.log('[verify-mfa-code] Filtered out success-related text from error message');
+                        }
+                    } else {
+                        console.log('[verify-mfa-code] No data.message or data.error found, using generic message');
+                    }
+                    
+                    // Log the error message before throwing
+                    console.log('[verify-mfa-code] Throwing error with message:', errorMsg);
                     throw new Error(errorMsg);
                 }
             } catch (error) {
                 // COMPLETELY clear any previous state before showing error
                 tokenResult.classList.remove('success', 'error', 'show');
-                tokenResult.classList.add('error');
                 
-                // Clear all content first
-                resultTitle.textContent = '';
-                resultMessage.textContent = '';
-                tokenDisplay.innerHTML = '';
-                
-                // Now set error content
-                resultTitle.textContent = '❌ Verification Failed';
-                resultMessage.textContent = error.message || 'The verification code is incorrect or token generation failed. Please try again.';
+                // Clear all content first - clear both textContent and innerHTML to ensure complete removal
+                if (resultTitle) {
+                    resultTitle.textContent = '';
+                    resultTitle.innerHTML = '';
+                }
+                if (resultMessage) {
+                    resultMessage.textContent = '';
+                    resultMessage.innerHTML = '';
+                }
+                if (tokenDisplay) {
+                    tokenDisplay.innerHTML = '';
+                    tokenDisplay.textContent = '';
+                }
                 
                 // Hide copy button when there's an error (no token to copy)
                 const copyBtn = document.getElementById('copyBtn');
@@ -826,6 +923,49 @@
                 
                 // Clear generated token since generation failed
                 generatedToken = '';
+                
+                // Try to extract error message from response if available
+                let errorMessage = 'The verification code is incorrect or token generation failed. Please try again.';
+                
+                // If error has a response, try to parse it
+                if (error.response) {
+                    try {
+                        const errorData = await error.response.json();
+                        if (errorData.message) {
+                            errorMessage = errorData.message;
+                        } else if (errorData.error) {
+                            errorMessage = errorData.error;
+                        }
+                    } catch (e) {
+                        // Response parsing failed, use default
+                    }
+                } else if (error.message && !error.message.includes('Failed to fetch')) {
+                    // Use error message if it's not a generic fetch error
+                    errorMessage = error.message;
+                }
+                
+                // Log the error for debugging
+                console.log('[verify-mfa-code] Catch block - error.message:', error.message);
+                console.log('[verify-mfa-code] Catch block - error:', error);
+                
+                // Sanitize error message to ensure it doesn't contain success-related text
+                const errorLower = errorMessage.toLowerCase();
+                if (errorLower.includes('token generated successfully') || 
+                    errorLower.includes('save this token') ||
+                    errorLower.includes('will not be shown again')) {
+                    errorMessage = 'The verification code is incorrect or token generation failed. Please try again.';
+                }
+                
+                console.log('[verify-mfa-code] Final error message to display:', errorMessage);
+                
+                // Now set error content AFTER clearing everything
+                tokenResult.classList.add('error');
+                if (resultTitle) {
+                    resultTitle.textContent = '❌ Verification Failed';
+                }
+                if (resultMessage) {
+                    resultMessage.textContent = errorMessage;
+                }
                 
                 tokenResult.classList.add('show');
             } finally {
