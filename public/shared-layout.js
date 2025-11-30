@@ -229,12 +229,20 @@
             // Wrap body content in main-content div
             const wrapper = document.createElement('div');
             wrapper.className = 'main-content';
-            while (document.body.firstChild && document.body.firstChild.tagName !== 'SCRIPT') {
+            while (document.body.firstChild && document.body.firstChild.tagName !== 'SCRIPT' && document.body.firstChild.id !== 'shared-footer') {
                 wrapper.appendChild(document.body.firstChild);
             }
             document.body.insertBefore(wrapper, document.body.firstChild);
         } else if (existingMain) {
             existingMain.classList.add('main-content');
+        }
+        
+        // Ensure footer placeholder is outside main-content
+        const mainContentDiv = document.querySelector('.main-content');
+        if (mainContentDiv && footerPlaceholder && mainContentDiv.contains(footerPlaceholder)) {
+            // Move footer outside main-content
+            mainContentDiv.removeChild(footerPlaceholder);
+            document.body.appendChild(footerPlaceholder);
         }
         
         // Insert footer

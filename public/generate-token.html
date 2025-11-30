@@ -28,6 +28,7 @@
             padding-left: 0;
             padding-right: 0;
             padding-bottom: 0;
+            overflow-x: hidden; /* Prevent horizontal scroll */
         }
         
         .main-content {
@@ -36,6 +37,12 @@
             align-items: center;
             justify-content: center;
             padding: 20px;
+            padding-bottom: 40px; /* Extra space before footer */
+            min-height: 0; /* Allow flex shrinking */
+            overflow-y: auto; /* Allow scrolling if content is too tall */
+            margin-top: 0;
+            margin-bottom: 0;
+            box-sizing: border-box; /* Include padding in height calculation */
         }
         
         /* Header and footer should span full width */
@@ -44,6 +51,30 @@
             width: 100%;
             margin-left: 0;
             margin-right: 0;
+            flex-shrink: 0; /* Prevent footer from shrinking */
+            position: relative; /* Ensure proper stacking */
+            z-index: 1; /* Ensure footer is above background */
+        }
+        
+        /* Footer should be outside the main content area */
+        body.has-shared-layout .footer {
+            background: #1a1a1a;
+            color: white;
+            margin-top: auto;
+            padding: 60px 0 30px;
+            width: 100%;
+        }
+        
+        body.has-shared-layout .footer-content {
+            gap: 40px;
+            margin-bottom: 40px;
+        }
+        
+        body.has-shared-layout .footer-bottom {
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+            padding-top: 30px;
+            text-align: center;
+            color: rgba(255, 255, 255, 0.6);
         }
         
         .container {
@@ -53,6 +84,7 @@
             max-width: 600px;
             width: 100%;
             padding: 40px;
+            margin-bottom: 0; /* Ensure no margin pushing footer down */
         }
         
         h1 {
@@ -1022,6 +1054,7 @@
         }
     </script>
     </div>
+    <!-- Footer placeholder - will be replaced by shared-layout.js -->
     <div id="shared-footer"></div>
 </body>
 </html>
