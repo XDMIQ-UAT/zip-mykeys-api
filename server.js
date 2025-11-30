@@ -1,15 +1,4 @@
 const express = require('express');
-// Conditionally require GCP Secret Manager (may not be available in serverless)
-let SecretManagerServiceClient = null;
-try {
-  if (process.env.VERCEL !== '1') {
-    // Only require GCP client in non-serverless environments
-    const gcpSecretManager = require('@google-cloud/secret-manager');
-    SecretManagerServiceClient = gcpSecretManager.SecretManagerServiceClient;
-  }
-} catch (error) {
-  console.warn('GCP Secret Manager package not available:', error.message);
-}
 // Use Vercel KV (Redis) - already connected in Vercel
 // Support both standard KV vars and mykeys_ prefixed vars
 const { createClient } = require('@vercel/kv');
@@ -124,25 +113,8 @@ const app = express();
 // Trust proxy (required for Vercel)
 app.set('trust proxy', true);
 
-// Initialize GCP Secret Manager client (fallback for migration)
-// In serverless environments, GCP client may not be available - make it optional
-let client = null;
-if (process.env.VERCEL !== '1' && SecretManagerServiceClient) {
-  // Only try to initialize GCP client in non-serverless environments
-  // In Vercel serverless, we use Redis/KV exclusively
-  try {
-    client = new SecretManagerServiceClient();
-  } catch (error) {
-    console.warn('GCP Secret Manager not available, using Upstash Redis only:', error.message);
-    client = null;
-  }
-} else {
-  // In Vercel serverless, skip GCP initialization entirely
-  if (process.env.VERCEL === '1') {
-    console.log('Vercel serverless detected - using Redis/KV only (GCP client skipped)');
-  }
-}
-const PROJECT_ID = process.env.GCP_PROJECT || 'myl-zip-www';
+// GCP Secret Manager removed - using Vercel KV (Redis) exclusively
+const PROJECT_ID = process.env.GCP_PROJECT || 'myl-zip-www'; // Kept for backward compatibility in error messages
 // Force port 8080 for Google OAuth redirect URI compatibility
 const PORT = process.env.PORT || 8080;
 if (PORT === 8000) {
@@ -155,8 +127,8 @@ const FINAL_PORT = PORT === 8000 ? 8080 : PORT;
 
 // Vercel KV is used directly - no wrapper function needed
 
-// Secret storage mode: 'redis' (Vercel KV/Redis) or 'gcp' (GCP Secret Manager) or 'hybrid' (Redis with GCP fallback)
-const SECRET_STORAGE_MODE = process.env.SECRET_STORAGE_MODE || 'redis';
+// Secret storage mode: 'redis' (Vercel KV/Redis) - GCP removed, using Redis exclusively
+const SECRET_STORAGE_MODE = 'redis'; // Always use Redis - GCP support removed
 
 // Configuration for passthrough (optional fallback)
 const API_MYL_ZIP_BASE = process.env.API_MYL_ZIP_BASE || 'https://api.myl.zip';
@@ -379,107 +351,19 @@ async function storeSecretInRedis(secretName, secretValue, labels = {}, ringId =
   }
 }
 
-// Helper function to get secret from GCP Secret Manager (fallback)
-async function getSecretFromGCP(secretName) {
-  if (!client) return null;
-  try {
-    const fullName = `projects/${PROJECT_ID}/secrets/${secretName}/versions/latest`;
-    const [version] = await client.accessSecretVersion({ name: fullName });
-    return version.payload.data.toString('utf8');
-  } catch (error) {
-    if (error.code === 5) { // NOT_FOUND
-      return null;
-    }
-    throw error;
-  }
-}
+// GCP Secret Manager functions removed - using Vercel KV (Redis) exclusively
 
-// Helper function to store secret in GCP Secret Manager (fallback)
-async function storeSecretInGCP(secretName, secretValue, labels = {}) {
-  if (!client) {
-    throw new Error('GCP Secret Manager client not available');
-  }
-  try {
-    // Check if secret exists
-    try {
-      await client.getSecret({ name: `projects/${PROJECT_ID}/secrets/${secretName}` });
-      // Update existing secret
-      await client.addSecretVersion({
-        parent: `projects/${PROJECT_ID}/secrets/${secretName}`,
-        payload: { data: Buffer.from(secretValue, 'utf8') },
-      });
-      return { created: false };
-    } catch {
-      // Create new secret
-      const [secret] = await client.createSecret({
-        parent: `projects/${PROJECT_ID}`,
-        secretId: secretName,
-        secret: {
-          replication: { automatic: {} },
-          labels: labels
-        },
-      });
-      await client.addSecretVersion({
-        parent: secret.name,
-        payload: { data: Buffer.from(secretValue, 'utf8') },
-      });
-      return { created: true };
-    }
-  } catch (error) {
-    throw error;
-  }
-}
-
-// Unified secret getter - Simple: Read from Redis or GCP (ring-scoped)
+// Unified secret getter - Read from Redis (ring-scoped)
 async function getSecret(secretName, ringId = null) {
-  if (SECRET_STORAGE_MODE === 'gcp') {
-    // GCP storage: use ring-scoped secret name
-    const gcpSecretName = ringId ? `ring-${ringId}-${secretName}` : secretName;
-    return await getSecretFromGCP(gcpSecretName);
-  }
-  
   // Read from Redis (ring-scoped)
   const value = await getSecretFromRedis(secretName, ringId);
-  if (value !== null) {
-    return value;
-  }
-  
-  // Fallback to GCP if hybrid mode
-  if (SECRET_STORAGE_MODE === 'hybrid' && client) {
-    const gcpSecretName = ringId ? `ring-${ringId}-${secretName}` : secretName;
-    const gcpValue = await getSecretFromGCP(gcpSecretName);
-    if (gcpValue) {
-      await storeSecretInRedis(secretName, gcpValue, {}, ringId);
-      return gcpValue;
-    }
-  }
-  
-  return null;
+  return value;
 }
 
-// Unified secret setter - Simple: Store in Redis or GCP (ring-scoped)
+// Unified secret setter - Store in Redis (ring-scoped)
 async function storeSecret(secretName, secretValue, labels = {}, ringId = null) {
-  if (SECRET_STORAGE_MODE === 'gcp') {
-    // GCP storage: use ring-scoped secret name
-    const gcpSecretName = ringId ? `ring-${ringId}-${secretName}` : secretName;
-    const gcpLabels = { ...labels, ringId: ringId || null };
-    return await storeSecretInGCP(gcpSecretName, secretValue, gcpLabels);
-  }
-  
   // Store in Redis (ring-scoped)
   const result = await storeSecretInRedis(secretName, secretValue, labels, ringId);
-  
-  // Sync to GCP if hybrid mode
-  if (SECRET_STORAGE_MODE === 'hybrid' && client) {
-    try {
-      const gcpSecretName = ringId ? `ring-${ringId}-${secretName}` : secretName;
-      const gcpLabels = { ...labels, ringId: ringId || null };
-      await storeSecretInGCP(gcpSecretName, secretValue, gcpLabels);
-    } catch (error) {
-      console.warn(`Failed to sync ${secretName} to GCP:`, error.message);
-    }
-  }
-  
   return result;
 }
 
@@ -787,8 +671,12 @@ app.put('/api/secrets/:name', authenticate, async (req, res) => {
 // Delete secret (legacy format)
 app.delete('/api/secrets/:name', authenticate, async (req, res) => {
   try {
-    const secretName = `projects/${PROJECT_ID}/secrets/${req.params.name}`;
-    await client.deleteSecret({ name: secretName });
+    // GCP removed - delete from Redis only
+    const kvClient = getKV();
+    if (kvClient) {
+      await kvClient.del(`secret:${req.params.name}`);
+      await kvClient.del(`secret:${req.params.name}:meta`);
+    }
     
     res.json({ 
       success: true, 
@@ -1030,13 +918,9 @@ app.get('/api/v1/secrets/:ecosystem', authenticate, async (req, res) => {
       visibleKeys.push(...ringKeys);
     }
     
-    // Also check GCP for backward compatibility
+    // GCP removed - using Redis only
     let ecosystemSecrets = [];
-    if (client) {
-      try {
-        const [secrets] = await client.listSecrets({
-          parent: `projects/${PROJECT_ID}`,
-        });
+    // GCP Secret Manager removed - using Vercel KV (Redis) exclusively
         
         // Filter secrets by ring and ecosystem
         // SECURITY: Strictly enforce ring isolation - only show secrets from user's ring
@@ -2127,27 +2011,8 @@ app.get('/api/admin/info', requireAdminRole, async (req, res) => {
     let ecosystemsCount = 0;
     let secretsCount = 0;
     
-    try {
-      if (client) {
-        // Try to get some basic stats from GCP
-        const [secrets] = await client.listSecrets({
-          parent: `projects/${PROJECT_ID}`,
-        });
-        secretsCount = secrets.length;
-        
-        // Count unique ecosystems (approximate)
-        const ecosystems = new Set();
-        secrets.forEach(secret => {
-          if (secret.labels && secret.labels.ecosystem) {
-            ecosystems.add(secret.labels.ecosystem);
-          }
-        });
-        ecosystemsCount = ecosystems.size;
-      }
-    } catch (error) {
-      // Stats are optional, continue without them
-      console.warn('Could not fetch stats:', error.message);
-    }
+    // GCP removed - stats from Redis only (not implemented yet)
+    // Stats are optional, continue without them
     
     // Determine permissions based on roles
     const permissions = [];
@@ -3674,32 +3539,8 @@ app.put('/api/sessions/:seed', authenticateWithDevice, async (req, res) => {
       clientId: req.clientId || req.deviceId || 'unknown',
     });
 
-    // Optionally also store in GCP Secret Manager for persistence
-    try {
-      const secretName = `session-${seed}`;
-      const secretValue = JSON.stringify({ encrypted, iv, algorithm });
-      await client.createSecret({
-        parent: `projects/${PROJECT_ID}`,
-        secretId: secretName,
-        secret: {
-          replication: {
-            automatic: {},
-          },
-        },
-      }).catch(() => {
-        // Secret might already exist, that's okay
-      });
-
-      await client.addSecretVersion({
-        parent: `projects/${PROJECT_ID}/secrets/${secretName}`,
-        payload: {
-          data: Buffer.from(secretValue, 'utf8'),
-        },
-      });
-    } catch (gcpError) {
-      // GCP storage is optional, continue with in-memory
-      console.warn('Failed to store session in GCP Secret Manager:', gcpError.message);
-    }
+    // GCP Secret Manager removed - using in-memory storage only
+    // In production, consider using Redis/KV for persistence
 
     res.json({
       success: true,
@@ -3723,22 +3564,12 @@ app.get('/api/sessions/:seed', authenticateWithDevice, async (req, res) => {
     // Try in-memory first
     let sessionData = sessionStorage.get(seed);
 
-    // If not in memory, try GCP Secret Manager
+    // GCP Secret Manager removed - using in-memory storage only
     if (!sessionData) {
-      try {
-        const secretName = `session-${seed}`;
-        const [version] = await client.accessSecretVersion({
-          name: `projects/${PROJECT_ID}/secrets/${secretName}/versions/latest`,
-        });
-        const secretValue = version.payload.data.toString('utf8');
-        sessionData = JSON.parse(secretValue);
-      } catch (gcpError) {
-        // Session not found in GCP either
-        return res.status(404).json({
-          error: 'Session not found',
-          message: `No session found for seed: ${seed}`,
-        });
-      }
+      return res.status(404).json({
+        error: 'Session not found',
+        message: `No session found for seed: ${seed}`,
+      });
     }
 
     res.json({
@@ -3765,15 +3596,7 @@ app.delete('/api/sessions/:seed', authenticateWithDevice, async (req, res) => {
     // Remove from memory
     sessionStorage.delete(seed);
 
-    // Try to delete from GCP Secret Manager
-    try {
-      const secretName = `session-${seed}`;
-      await client.deleteSecret({
-        name: `projects/${PROJECT_ID}/secrets/${secretName}`,
-      });
-    } catch (gcpError) {
-      // Secret might not exist, that's okay
-    }
+    // GCP Secret Manager removed - using in-memory storage only
 
     res.json({
       success: true,
@@ -3803,26 +3626,7 @@ app.get('/api/sessions', authenticateWithDevice, async (req, res) => {
       });
     }
 
-    // Optionally also list from GCP Secret Manager
-    try {
-      const [secrets] = await client.listSecrets({
-        parent: `projects/${PROJECT_ID}`,
-        filter: 'name:session-*',
-      });
-
-      for (const secret of secrets) {
-        const seed = secret.name.split('/').pop().replace('session-', '');
-        if (!sessions.find(s => s.seed === seed)) {
-          sessions.push({
-            seed,
-            updatedAt: secret.createTime?.seconds ? new Date(secret.createTime.seconds * 1000).toISOString() : null,
-            clientId: 'unknown',
-          });
-        }
-      }
-    } catch (gcpError) {
-      // GCP listing is optional
-    }
+    // GCP Secret Manager removed - using in-memory storage only
 
     res.json({
       success: true,
@@ -3867,31 +3671,7 @@ app.put('/api/sessions/:seed/fragments/:index', authenticateWithDevice, async (r
       clientId: req.clientId || req.deviceId || 'unknown',
     });
 
-    // Optionally also store in GCP Secret Manager
-    try {
-      const secretName = `session-fragment-${seed}-${index}`;
-      const secretValue = JSON.stringify({ encrypted, iv, algorithm, metadata });
-      await client.createSecret({
-        parent: `projects/${PROJECT_ID}`,
-        secretId: secretName,
-        secret: {
-          replication: {
-            automatic: {},
-          },
-        },
-      }).catch(() => {
-        // Secret might already exist
-      });
-
-      await client.addSecretVersion({
-        parent: `projects/${PROJECT_ID}/secrets/${secretName}`,
-        payload: {
-          data: Buffer.from(secretValue, 'utf8'),
-        },
-      });
-    } catch (gcpError) {
-      // GCP storage is optional
-    }
+    // GCP Secret Manager removed - using in-memory storage only
 
     res.json({
       success: true,
@@ -3918,21 +3698,12 @@ app.get('/api/sessions/:seed/fragments/:index', authenticateWithDevice, async (r
     // Try in-memory first
     let fragmentData = fragmentStorage.get(fragmentKey);
 
-    // If not in memory, try GCP Secret Manager
+    // GCP Secret Manager removed - using in-memory storage only
     if (!fragmentData) {
-      try {
-        const secretName = `session-fragment-${seed}-${index}`;
-        const [version] = await client.accessSecretVersion({
-          name: `projects/${PROJECT_ID}/secrets/${secretName}/versions/latest`,
-        });
-        const secretValue = version.payload.data.toString('utf8');
-        fragmentData = JSON.parse(secretValue);
-      } catch (gcpError) {
-        return res.status(404).json({
-          error: 'Fragment not found',
-          message: `No fragment found for seed: ${seed}, index: ${index}`,
-        });
-      }
+      return res.status(404).json({
+        error: 'Fragment not found',
+        message: `No fragment found for seed: ${seed}, index: ${index}`,
+      });
     }
 
     res.json({
@@ -3970,28 +3741,7 @@ app.get('/api/sessions/:seed/fragments', authenticateWithDevice, async (req, res
       }
     }
 
-    // Also check GCP Secret Manager
-    try {
-      const [secrets] = await client.listSecrets({
-        parent: `projects/${PROJECT_ID}`,
-        filter: `name:session-fragment-${seed}-*`,
-      });
-
-      for (const secret of secrets) {
-        const indexMatch = secret.name.match(/session-fragment-.*-(\d+)$/);
-        if (indexMatch) {
-          const index = parseInt(indexMatch[1]);
-          if (!fragments.find(f => f.index === index)) {
-            fragments.push({
-              index,
-              updatedAt: secret.createTime?.seconds ? new Date(secret.createTime.seconds * 1000).toISOString() : null,
-            });
-          }
-        }
-      }
-    } catch (gcpError) {
-      // GCP listing is optional
-    }
+    // GCP Secret Manager removed - using in-memory storage only
 
     fragments.sort((a, b) => a.index - b.index);
 
