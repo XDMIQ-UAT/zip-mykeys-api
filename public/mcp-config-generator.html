@@ -42,10 +42,19 @@
             box-sizing: border-box; /* Include padding in height calculation */
         }
         
+        /* Ensure html and body are full width */
+        html, body {
+            width: 100% !important;
+            max-width: 100% !important;
+            margin: 0 !important;
+            padding: 0 !important;
+            overflow-x: hidden !important;
+        }
+        
         /* Header and footer should span full width */
         body.has-shared-layout .header,
         body.has-shared-layout .footer {
-            width: 100vw !important;
+            width: 100% !important;
             max-width: 100% !important;
             margin-left: 0 !important;
             margin-right: 0 !important;
@@ -57,6 +66,7 @@
             position: relative !important;
             z-index: 1 !important;
             box-sizing: border-box !important;
+            transform: translateX(0) !important;
         }
         
         /* Header specific styling */
@@ -71,7 +81,7 @@
             color: white !important;
             margin-top: auto !important;
             padding: 30px 0 15px !important;
-            width: 100vw !important;
+            width: 100% !important;
             max-width: 100% !important;
             flex-shrink: 0 !important;
             box-sizing: border-box !important;

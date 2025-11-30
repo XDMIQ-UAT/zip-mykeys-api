@@ -64,13 +64,14 @@
             position: sticky;
             top: 0;
             z-index: 100;
-            width: 100vw !important;
+            width: 100% !important;
             max-width: 100% !important;
             margin: 0 !important;
             padding: 0 !important;
             left: 0 !important;
             right: 0 !important;
             box-sizing: border-box;
+            transform: translateX(0) !important;
         }
         
         .header .container {
@@ -133,13 +134,14 @@
             color: white;
             margin-top: auto;
             padding: 60px 0 30px;
-            width: 100vw !important;
+            width: 100% !important;
             max-width: 100% !important;
             margin-left: 0 !important;
             margin-right: 0 !important;
             left: 0 !important;
             right: 0 !important;
             box-sizing: border-box;
+            transform: translateX(0) !important;
         }
         
         .footer .container {
@@ -202,15 +204,31 @@
             opacity: 1 !important;
         }
         
+        /* Ensure html and body are full width */
+        html, body {
+            width: 100% !important;
+            max-width: 100% !important;
+            margin: 0 !important;
+            padding: 0 !important;
+            overflow-x: hidden !important;
+        }
+        
         /* Layout wrapper */
         body.has-shared-layout {
             display: flex;
             flex-direction: column;
             min-height: 100vh;
+            width: 100% !important;
+            max-width: 100% !important;
+            margin: 0 !important;
+            padding: 0 !important;
+            overflow-x: hidden !important;
         }
         
         .main-content {
             flex: 1;
+            width: 100% !important;
+            max-width: 100% !important;
         }
         
         @media (max-width: 768px) {
@@ -405,7 +423,7 @@
             // Force header and footer to full width with inline styles
             const insertedHeader = document.querySelector('.header');
             if (insertedHeader) {
-                insertedHeader.style.width = '100vw';
+                insertedHeader.style.width = '100%';
                 insertedHeader.style.maxWidth = '100%';
                 insertedHeader.style.marginLeft = '0';
                 insertedHeader.style.marginRight = '0';
@@ -413,9 +431,11 @@
                 insertedHeader.style.paddingRight = '0';
                 insertedHeader.style.left = '0';
                 insertedHeader.style.right = '0';
+                insertedHeader.style.position = 'relative';
+                insertedHeader.style.transform = 'translateX(0)';
             }
             
-            insertedFooter.style.width = '100vw';
+            insertedFooter.style.width = '100%';
             insertedFooter.style.maxWidth = '100%';
             insertedFooter.style.marginLeft = '0';
             insertedFooter.style.marginRight = '0';
@@ -423,6 +443,21 @@
             insertedFooter.style.paddingRight = '0';
             insertedFooter.style.left = '0';
             insertedFooter.style.right = '0';
+            insertedFooter.style.position = 'relative';
+            insertedFooter.style.transform = 'translateX(0)';
+            
+            // Also ensure html and body are full width
+            document.documentElement.style.width = '100%';
+            document.documentElement.style.maxWidth = '100%';
+            document.documentElement.style.margin = '0';
+            document.documentElement.style.padding = '0';
+            document.documentElement.style.overflowX = 'hidden';
+            
+            document.body.style.width = '100%';
+            document.body.style.maxWidth = '100%';
+            document.body.style.margin = '0';
+            document.body.style.padding = '0';
+            document.body.style.overflowX = 'hidden';
         }
     }
     
