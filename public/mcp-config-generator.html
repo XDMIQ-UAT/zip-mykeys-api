@@ -42,6 +42,13 @@
             box-sizing: border-box; /* Include padding in height calculation */
         }
         
+        /* Ensure container doesn't stretch beyond content */
+        .main-content > .container {
+            flex-shrink: 0;
+            align-self: flex-start;
+            margin-top: 20px;
+        }
+        
         /* Header and footer should span full width */
         body.has-shared-layout .header,
         body.has-shared-layout .footer {
