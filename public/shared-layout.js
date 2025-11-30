@@ -9,8 +9,8 @@
     'use strict';
     
     const headerHTML = `
-        <header class="header">
-            <div class="container">
+        <header class="header" style="width: 100%; margin: 0; padding: 0; position: relative; left: 0; right: 0;">
+            <div class="container" style="max-width: 1200px; margin: 0 auto; padding: 0 20px;">
                 <nav class="nav">
                     <a href="/" class="logo">
                         <span class="logo-icon">🔐</span>
@@ -28,8 +28,8 @@
     `;
     
     const footerHTML = `
-        <footer class="footer">
-            <div class="container">
+        <footer class="footer" style="width: 100%; margin: 0; padding: 60px 0 30px; position: relative; left: 0; right: 0;">
+            <div class="container" style="max-width: 1200px; margin: 0 auto; padding: 0 20px;">
                 <div class="footer-content">
                     <div class="footer-section">
                         <h3>MyKeys.zip</h3>
@@ -423,41 +423,55 @@
             // Force header and footer to full width with inline styles
             const insertedHeader = document.querySelector('.header');
             if (insertedHeader) {
-                insertedHeader.style.width = '100%';
-                insertedHeader.style.maxWidth = '100%';
-                insertedHeader.style.marginLeft = '0';
-                insertedHeader.style.marginRight = '0';
-                insertedHeader.style.paddingLeft = '0';
-                insertedHeader.style.paddingRight = '0';
-                insertedHeader.style.left = '0';
-                insertedHeader.style.right = '0';
-                insertedHeader.style.position = 'relative';
-                insertedHeader.style.transform = 'translateX(0)';
+                // Remove from any parent that might constrain width
+                if (insertedHeader.parentElement !== document.body) {
+                    const parent = insertedHeader.parentElement;
+                    parent.removeChild(insertedHeader);
+                    document.body.insertBefore(insertedHeader, document.body.firstChild);
+                }
+                
+                // Force full width
+                insertedHeader.style.cssText = 'width: 100% !important; max-width: 100% !important; margin: 0 !important; padding: 0 !important; left: 0 !important; right: 0 !important; position: relative !important; transform: translateX(0) !important; box-sizing: border-box !important;';
+                
+                // Ensure header container doesn't constrain width
+                const headerContainer = insertedHeader.querySelector('.container');
+                if (headerContainer) {
+                    headerContainer.style.cssText = 'max-width: 1200px !important; margin: 0 auto !important; padding: 0 20px !important; width: 100% !important; box-sizing: border-box !important;';
+                }
             }
             
-            insertedFooter.style.width = '100%';
-            insertedFooter.style.maxWidth = '100%';
-            insertedFooter.style.marginLeft = '0';
-            insertedFooter.style.marginRight = '0';
-            insertedFooter.style.paddingLeft = '0';
-            insertedFooter.style.paddingRight = '0';
-            insertedFooter.style.left = '0';
-            insertedFooter.style.right = '0';
-            insertedFooter.style.position = 'relative';
-            insertedFooter.style.transform = 'translateX(0)';
+            // Remove footer from any parent that might constrain width
+            if (insertedFooter.parentElement !== document.body) {
+                const parent = insertedFooter.parentElement;
+                parent.removeChild(insertedFooter);
+                document.body.appendChild(insertedFooter);
+            }
+            
+            // Force full width
+            insertedFooter.style.cssText = 'width: 100% !important; max-width: 100% !important; margin: 0 !important; padding: 60px 0 30px !important; left: 0 !important; right: 0 !important; position: relative !important; transform: translateX(0) !important; box-sizing: border-box !important;';
+            
+            // Ensure footer container doesn't constrain width
+            const footerContainer = insertedFooter.querySelector('.container');
+            if (footerContainer) {
+                footerContainer.style.cssText = 'max-width: 1200px !important; margin: 0 auto !important; padding: 0 20px !important; width: 100% !important; box-sizing: border-box !important;';
+            }
             
             // Also ensure html and body are full width
-            document.documentElement.style.width = '100%';
-            document.documentElement.style.maxWidth = '100%';
-            document.documentElement.style.margin = '0';
-            document.documentElement.style.padding = '0';
-            document.documentElement.style.overflowX = 'hidden';
+            document.documentElement.style.cssText = 'width: 100% !important; max-width: 100% !important; margin: 0 !important; padding: 0 !important; overflow-x: hidden !important;';
             
-            document.body.style.width = '100%';
-            document.body.style.maxWidth = '100%';
-            document.body.style.margin = '0';
-            document.body.style.padding = '0';
-            document.body.style.overflowX = 'hidden';
+            document.body.style.cssText = 'width: 100% !important; max-width: 100% !important; margin: 0 !important; padding: 0 !important; overflow-x: hidden !important;';
+            
+            // Use requestAnimationFrame to ensure styles are applied after layout
+            requestAnimationFrame(() => {
+                if (insertedHeader) {
+                    insertedHeader.style.width = '100%';
+                    insertedHeader.style.maxWidth = '100%';
+                }
+                if (insertedFooter) {
+                    insertedFooter.style.width = '100%';
+                    insertedFooter.style.maxWidth = '100%';
+                }
+            });
         }
     }
     
