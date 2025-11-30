@@ -469,6 +469,11 @@
         }
     </style>
     <script>
+        // Deployment verification log - runs immediately
+        console.log('%c🚀 MCP Config Generator - Deployment Active', 'color: #667eea; font-size: 14px; font-weight: bold;');
+        console.log('%c✅ File: mcp-config-generator.html', 'color: #28a745; font-size: 12px;');
+        console.log('%c📅 Last Updated: 2025-11-30', 'color: #666; font-size: 11px;');
+        console.log('%c🔧 Container Width: 550px max-width', 'color: #666; font-size: 11px;');
         console.log('=== BEFORE shared-layout.js script tag ===');
     </script>
     <script src="/shared-layout.js?v=2" onerror="alert('FAILED to load shared-layout.js')" onload="document.body.setAttribute('data-layout-loaded', 'true')"></script>
@@ -1224,12 +1229,6 @@ ${configOutput}`;
                 });
             }
         }
-        
-        // Deployment verification log
-        console.log('%c🚀 MCP Config Generator - Deployment Active', 'color: #667eea; font-size: 14px; font-weight: bold;');
-        console.log('%c✅ File: mcp-config-generator.html', 'color: #28a745; font-size: 12px;');
-        console.log('%c📅 Last Updated: 2025-11-30', 'color: #666; font-size: 11px;');
-        console.log('%c🔧 Container Width: 550px max-width', 'color: #666; font-size: 11px;');
     </script>
     </div>
     </div>
