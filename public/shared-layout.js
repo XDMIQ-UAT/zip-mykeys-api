@@ -242,7 +242,7 @@
         const containerDiv = document.querySelector('.container');
         
         if (footerPlaceholder) {
-            // Check if footer is inside main-content or container
+            // Check if footer is inside main-content or container and move it out
             if (mainContentDiv && mainContentDiv.contains(footerPlaceholder)) {
                 mainContentDiv.removeChild(footerPlaceholder);
                 document.body.appendChild(footerPlaceholder);
@@ -260,13 +260,27 @@
             document.body.appendChild(footerDiv.firstElementChild);
         }
         
-        // Ensure footer is not inside any container
+        // Double-check: Ensure footer is not inside any container after insertion
         const insertedFooter = document.querySelector('.footer');
         if (insertedFooter) {
-            const currentParent = insertedFooter.parentElement;
-            if (currentParent && (currentParent.classList.contains('main-content') || currentParent.classList.contains('container'))) {
-                currentParent.removeChild(insertedFooter);
-                document.body.appendChild(insertedFooter);
+            let currentParent = insertedFooter.parentElement;
+            let moved = false;
+            
+            // Keep moving up until we're outside main-content and container
+            while (currentParent && currentParent !== document.body) {
+                if (currentParent.classList.contains('main-content') || 
+                    currentParent.classList.contains('container') ||
+                    currentParent.id === 'main-content') {
+                    currentParent.removeChild(insertedFooter);
+                    document.body.appendChild(insertedFooter);
+                    moved = true;
+                    break;
+                }
+                currentParent = currentParent.parentElement;
+            }
+            
+            if (moved) {
+                console.log('Footer moved outside container');
             }
         }
     }
