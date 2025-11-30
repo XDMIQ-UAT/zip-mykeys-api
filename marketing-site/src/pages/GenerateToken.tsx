@@ -45,7 +45,8 @@ export default function GenerateToken() {
 
       const data = await response.json()
 
-      if (response.ok && data.success) {
+      // Handle both old format (data.success) and new standardized format (data.status)
+      if (response.ok && (data.success || data.status === 'success')) {
         setStep(2)
       } else {
         setError(data.error || data.message || 'Failed to send verification code')
@@ -83,7 +84,14 @@ export default function GenerateToken() {
 
       const data = await response.json()
 
-      if (response.ok && data.success && data.token) {
+      // Handle standardized API response format: { status: 'success', data: { token: ... } }
+      if (response.ok && data.status === 'success' && data.data && data.data.token) {
+        setSuccess({
+          token: data.data.token,
+          expiresAt: data.data.expiresAt || new Date().toISOString(),
+        })
+      } else if (response.ok && data.success && data.token) {
+        // Fallback for old format
         setSuccess({
           token: data.token,
           expiresAt: data.expiresAt || new Date().toISOString(),
@@ -98,10 +106,19 @@ export default function GenerateToken() {
     }
   }
 
+  const [copied, setCopied] = useState(false)
+
   const copyToken = () => {
     if (success?.token) {
-      navigator.clipboard.writeText(success.token)
-      // You could add a toast notification here
+      navigator.clipboard.writeText(success.token).then(() => {
+        setCopied(true)
+        setTimeout(() => {
+          setCopied(false)
+        }, 2000)
+      }).catch((err) => {
+        console.error('Failed to copy token:', err)
+        alert('Failed to copy token. Please copy manually.')
+      })
     }
   }
 
@@ -113,8 +130,8 @@ export default function GenerateToken() {
   return (
     <div className="generate-token-page">
       <div className="container">
-        <h1>🔑 Generate MCP Token</h1>
-        <p className="subtitle">Create a secure token for Cursor, Warp, or other MCP clients</p>
+        <h1>🔑 Generate Token</h1>
+        <p className="subtitle">Create a secure token for CLI and API access</p>
 
         {/* Step Indicator */}
         <div className="step-indicator">
@@ -302,8 +319,15 @@ export default function GenerateToken() {
             <div className="token-display">
               <div className="token-value">{success.token}</div>
             </div>
-            <button onClick={copyToken} className="copy-btn">
-              Copy Token
+            <button 
+              onClick={copyToken} 
+              className="copy-btn"
+              style={{
+                background: copied ? '#28a745' : '#667eea',
+                transition: 'all 0.2s ease'
+              }}
+            >
+              {copied ? '✓ Copied!' : 'Copy Token'}
             </button>
           </div>
         )}

@@ -280,11 +280,14 @@
             transition: width 0.3s ease;
         }
     </style>
+    <script src="/shared-layout.js"></script>
 </head>
 <body>
+    <div id="shared-header"></div>
+    <div class="main-content">
     <div class="container">
-        <h1>🔑 Generate MCP Token</h1>
-        <p class="subtitle">Create a secure token for Cursor, Warp, or other MCP clients</p>
+        <h1>🔑 Generate Token</h1>
+        <p class="subtitle">Create a secure token for CLI and API access</p>
         
         <!-- Step Indicator -->
         <div class="step-indicator" id="stepIndicator">
@@ -796,17 +799,31 @@
             if (generatedToken) {
                 navigator.clipboard.writeText(generatedToken).then(() => {
                     const btn = document.getElementById('copyBtn');
-                    const originalText = btn.textContent;
-                    btn.textContent = '✓ Copied!';
-                    btn.style.background = '#28a745';
-                    setTimeout(() => {
-                        btn.textContent = originalText;
-                        btn.style.background = '';
-                    }, 2000);
+                    if (btn) {
+                        const originalText = btn.textContent;
+                        btn.textContent = '✓ Copied!';
+                        btn.style.background = '#28a745';
+                        btn.style.color = '#ffffff';
+                        setTimeout(() => {
+                            btn.textContent = originalText;
+                            btn.style.background = '';
+                            btn.style.color = '';
+                        }, 2000);
+                    } else {
+                        console.error('Copy button not found');
+                        alert('Token copied to clipboard!');
+                    }
+                }).catch((err) => {
+                    console.error('Failed to copy token:', err);
+                    alert('Failed to copy token. Please copy manually.');
                 });
+            } else {
+                alert('No token to copy. Please generate a token first.');
             }
         }
     </script>
+    </div>
+    <div id="shared-footer"></div>
 </body>
 </html>
 

@@ -207,15 +207,34 @@
             background: #f5f5f5;
             border-radius: 8px;
             display: none;
+            border-left: 4px solid #ddd;
         }
         
         .result-box.show {
             display: block;
         }
         
+        .result-box.success {
+            background: #e8f5e9;
+            border-left-color: #4caf50;
+        }
+        
+        .result-box.error {
+            background: #ffebee;
+            border-left-color: #f44336;
+        }
+        
         .result-box h3 {
             margin-bottom: 15px;
             color: #333;
+        }
+        
+        .result-box.success h3 {
+            color: #2e7d32;
+        }
+        
+        .result-box.error h3 {
+            color: #c62828;
         }
         
         .json-output {
@@ -277,8 +296,11 @@
             border-radius: 4px;
         }
     </style>
+    <script src="/shared-layout.js"></script>
 </head>
 <body>
+    <div id="shared-header"></div>
+    <div class="main-content">
     <div class="container">
         <h1>🔧 MCP Configuration Generator</h1>
         <p class="subtitle">Generate Cursor/Warp MCP configuration from web interface</p>
@@ -364,6 +386,19 @@
                         </div>
                         
                         <div class="form-group">
+                            <label for="tokenTargetPlatform">Target Platform *</label>
+                            <select id="tokenTargetPlatform" name="tokenTargetPlatform" required>
+                                <option value="auto">Auto-detect (Current Platform)</option>
+                                <option value="windows">Windows</option>
+                                <option value="macos">macOS</option>
+                                <option value="linux">Linux</option>
+                            </select>
+                            <small style="color: #666; font-size: 12px; display: block; margin-top: 4px;">
+                                Select the platform where you'll use this configuration
+                            </small>
+                        </div>
+                        
+                        <div class="form-group">
                             <label for="expiresInDays">Expires In (days)</label>
                             <input type="number" id="expiresInDays" name="expiresInDays" value="90" min="1" max="365" required>
                         </div>
@@ -423,6 +458,17 @@
                 </div>
                 
                 <div class="form-group">
+                    <label for="targetPlatform">Target Platform *</label>
+                    <select id="targetPlatform" name="targetPlatform" required>
+                        <option value="auto">Auto-detect (Current Platform)</option>
+                        <option value="windows">Windows</option>
+                        <option value="macos">macOS</option>
+                        <option value="linux">Linux</option>
+                    </select>
+                    <span class="help-text">Select the platform where you'll use this configuration</span>
+                </div>
+                
+                <div class="form-group">
                     <label for="serverSource">MCP Server Source</label>
                     <select id="serverSource" name="serverSource">
                         <option value="hosted" selected>Download from mykeys.zip (Recommended)</option>
@@ -455,7 +501,7 @@
                 <h3>✅ Configuration Generated</h3>
                 <p>Copy this JSON and paste it into your Cursor MCP settings:</p>
                 <div class="json-output" id="configOutput"></div>
-                <button class="copy-btn" onclick="copyConfig()">Copy Configuration</button>
+                <button class="copy-btn" onclick="copyConfig(event)">Copy Configuration</button>
             </div>
         </div>
         
@@ -503,6 +549,14 @@
     </div>
     
     <script>
+        // Get API URL from environment or use default
+        // In production, this should be set via window.MYKEYS_URL or use relative URLs
+        // For dev server, we need to use the full API URL
+        const MYKEYS_URL = window.MYKEYS_URL || (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') 
+            ? 'https://mykeys.zip' 
+            : '';
+        const API_BASE = MYKEYS_URL || '';
+        
         let generatedToken = '';
         let generatedConfig = '';
         
@@ -565,8 +619,9 @@
             const newTokenForm = tokenForm.cloneNode(true);
             tokenForm.parentNode.replaceChild(newTokenForm, tokenForm);
             
-            // Token MFA Request Form
-            newRequestForm.addEventListener('submit', async (e) => {
+            // Token MFA Request Form - attach to the form that's now in the DOM
+            const requestForm = document.getElementById('tokenMfaRequestForm');
+            requestForm.addEventListener('submit', async (e) => {
             e.preventDefault();
             
             const email = document.getElementById('tokenEmail').value.trim();
@@ -581,37 +636,49 @@
             }
             
             try {
-                const response = await fetch('/api/auth/request-mfa-code', {
+                const response = await fetch(`${API_BASE}/api/auth/request-mfa-code`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ email }),
                 });
                 
-                const data = await response.json();
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
                 
-                if (response.ok && data.success) {
+                const data = await response.json();
+                console.log('API Response:', data);
+                
+                // Handle both old format (data.success) and new standardized format (data.status)
+                if (response.ok && (data.success || data.status === 'success')) {
                     tokenVerifiedEmail = email;
                     document.getElementById('tokenStep1').style.display = 'none';
                     document.getElementById('tokenStep2').style.display = 'block';
                     document.getElementById('tokenCodeSentMessage').innerHTML = `Check your <strong>email</strong> for the 4-digit code sent to ${email}.`;
                 } else {
-                    throw new Error(data.error || data.message || 'Failed to send verification code');
+                    const errorMsg = data.error || data.message || 'Failed to send verification code';
+                    console.error('API Error:', errorMsg, data);
+                    throw new Error(errorMsg);
                 }
             } catch (error) {
+                console.error('Form submission error:', error);
+                resultBox.classList.remove('success');
+                resultBox.classList.add('error', 'show');
                 resultTitle.textContent = '❌ Error';
                 resultMessage.textContent = error.message || 'Failed to send verification code';
                 tokenOutput.textContent = '';
-                resultBox.classList.add('show');
             }
             });
             
-            // Token Form (Step 2: Verify & Generate)
-            newTokenForm.addEventListener('submit', async (e) => {
+            // Token Form (Step 2: Verify & Generate) - attach to the form that's now in the DOM
+            const verifyForm = document.getElementById('tokenForm');
+            verifyForm.addEventListener('submit', async (e) => {
             e.preventDefault();
             
             const code = document.getElementById('tokenMfaCode').value.replace(/\D/g, '').slice(0, 4);
             const clientId = document.getElementById('tokenClientId').value;
             const clientType = document.getElementById('tokenClientType').value;
+            const targetPlatform = document.getElementById('tokenTargetPlatform').value;
             const expiresInDays = parseInt(document.getElementById('expiresInDays').value);
             const ecosystemAcknowledged = document.getElementById('tokenEcosystemAcknowledged').checked;
             
@@ -626,7 +693,7 @@
             const tokenOutput = document.getElementById('tokenOutput');
             
             try {
-                const response = await fetch('/api/auth/verify-mfa-code', {
+                const response = await fetch(`${API_BASE}/api/auth/verify-mfa-code`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
@@ -640,8 +707,9 @@
                 
                 const data = await response.json();
                 
-                if (response.ok && data.success && data.token) {
-                    generatedToken = data.token;
+                // Handle standardized API response format: { status: 'success', data: { token: ... } }
+                if (response.ok && data.status === 'success' && data.data && data.data.token) {
+                    generatedToken = data.data.token;
                     
                     // Hide token generation section
                     document.getElementById('tokenGenerationSection').style.display = 'none';
@@ -650,9 +718,18 @@
                     document.getElementById('configFormSection').style.display = 'block';
                     
                     // Auto-fill token and other fields in config form
-                    document.getElementById('mcpToken').value = data.token;
+                    document.getElementById('mcpToken').value = data.data.token;
                     document.getElementById('clientId').value = clientId;
                     document.getElementById('clientType').value = clientType;
+                    
+                    // Set platform selector from token form
+                    const platformSelector = document.getElementById('targetPlatform');
+                    if (platformSelector) {
+                        platformSelector.value = targetPlatform || 'auto';
+                    }
+                    
+                    // Automatically generate MCP configuration
+                    generateMCPConfig();
                     
                     // Update workflow indicator
                     const tokenStep = document.querySelector('.workflow-step[data-tab="token"]');
@@ -666,16 +743,24 @@
                         configStep.classList.add('active');
                     }
                     
-                    // Scroll to config form
-                    document.getElementById('configFormSection').scrollIntoView({ behavior: 'smooth', block: 'start' });
+                    // Scroll to config result
+                    setTimeout(() => {
+                        const configResult = document.getElementById('configResult');
+                        if (configResult) {
+                            configResult.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                        }
+                    }, 100);
                 } else {
-                    throw new Error(data.error || data.message || 'Failed to generate token');
+                    // Handle both old format (data.success) and new format (data.status)
+                    const errorMsg = data.error || data.message || 'Failed to generate token';
+                    throw new Error(errorMsg);
                 }
             } catch (error) {
+                resultBox.classList.remove('success');
+                resultBox.classList.add('error', 'show');
                 resultTitle.textContent = '❌ Error';
                 resultMessage.textContent = error.message || 'Failed to generate token. Please check your verification code.';
                 tokenOutput.textContent = '';
-                resultBox.classList.add('show');
             }
             });
         }
@@ -691,26 +776,35 @@
             document.getElementById('tokenGenerationSection').style.display = 'block';
         }
         
-        // Update server path based on source selection
+        // Update server path based on source selection and platform
         function updateServerPath() {
             const serverSource = document.getElementById('serverSource');
             const serverPathInput = document.getElementById('serverPath');
             const serverPathHelp = document.getElementById('serverPathHelp');
+            const targetPlatform = document.getElementById('targetPlatform');
             
-            if (!serverSource || !serverPathInput || !serverPathHelp) {
+            if (!serverSource || !serverPathInput || !serverPathHelp || !targetPlatform) {
                 console.error('Required elements not found');
                 return;
             }
             
             const sourceValue = serverSource ? serverSource.value : 'local';
+            const platformValue = targetPlatform ? targetPlatform.value : 'auto';
+            
+            // Determine platform
+            let isWindows = false;
+            if (platformValue === 'auto') {
+                isWindows = navigator.platform.toLowerCase().includes('win');
+            } else {
+                isWindows = platformValue === 'windows';
+            }
             
             if (sourceValue === 'hosted') {
-                // Auto-detect OS and set appropriate default path
-                const isWindows = navigator.platform.toLowerCase().includes('win');
+                // Set appropriate default path based on selected platform
                 let defaultPath;
                 if (isWindows) {
-                    // Use PowerShell environment variable syntax
-                    defaultPath = '$env:USERPROFILE\\.mykeys\\mcp-server.js';
+                    // Use Windows environment variable syntax that works in JSON configs
+                    defaultPath = '%USERPROFILE%\\.mykeys\\mcp-server.js';
                 } else {
                     defaultPath = '~/.mykeys/mcp-server.js';
                 }
@@ -719,20 +813,23 @@
                 serverPathInput.removeAttribute('readonly');
                 serverPathInput.value = defaultPath;
                 serverPathInput.placeholder = 'Local path after download';
-                serverPathHelp.innerHTML = `
-                    <strong>Hosted Download:</strong> The MCP server will be downloaded from <code>https://mykeys.zip/mcp-server.js</code><br>
-                    <strong>Download Instructions:</strong><br>
+                let downloadHelpText = `<strong>Hosted Download:</strong> The MCP server will be downloaded from <code>https://mykeys.zip/mcp-server.js</code><br><strong>Download Instructions:</strong><br>`;
+                if (isWindows) {
+                    downloadHelpText += `
                     • <strong>Windows (PowerShell):</strong><br>
                       <code>New-Item -ItemType Directory -Force -Path "$env:USERPROFILE\\.mykeys"</code><br>
                       <code>Invoke-WebRequest -Uri "https://mykeys.zip/mcp-server.js" -OutFile "$env:USERPROFILE\\.mykeys\\mcp-server.js"</code><br>
                     • <strong>Windows (CMD):</strong><br>
                       <code>mkdir "%USERPROFILE%\\.mykeys"</code><br>
-                      <code>curl -o "%USERPROFILE%\\.mykeys\\mcp-server.js" https://mykeys.zip/mcp-server.js</code><br>
+                      <code>curl -o "%USERPROFILE%\\.mykeys\\mcp-server.js" https://mykeys.zip/mcp-server.js</code>`;
+                } else {
+                    downloadHelpText += `
                     • <strong>macOS/Linux:</strong><br>
                       <code>mkdir -p ~/.mykeys</code><br>
-                      <code>curl -o ~/.mykeys/mcp-server.js https://mykeys.zip/mcp-server.js</code><br>
-                    • The path above will be used in your config after download
-                `;
+                      <code>curl -o ~/.mykeys/mcp-server.js https://mykeys.zip/mcp-server.js</code>`;
+                }
+                downloadHelpText += `<br>• The path above will be used in your config after download`;
+                serverPathHelp.innerHTML = downloadHelpText;
             } else {
                 serverPathInput.removeAttribute('readonly');
                 serverPathInput.value = '';
@@ -749,12 +846,13 @@
         // Make updateServerPath available globally for debugging
         window.updateServerPath = updateServerPath;
         
-        // Attach event listener to serverSource dropdown
+        // Attach event listeners to serverSource and platform dropdowns
         function setupServerPathListener() {
             const serverSource = document.getElementById('serverSource');
             const serverPathInput = document.getElementById('serverPath');
+            const targetPlatform = document.getElementById('targetPlatform');
             
-            if (!serverSource || !serverPathInput) {
+            if (!serverSource || !serverPathInput || !targetPlatform) {
                 console.error('Required elements not found for setupServerPathListener');
                 return;
             }
@@ -764,8 +862,17 @@
                 serverSource.value = 'hosted';
             }
             
-            // Attach change listener
+            // Set default platform to auto-detect
+            if (!targetPlatform.value || targetPlatform.value === '') {
+                targetPlatform.value = 'auto';
+            }
+            
+            // Attach change listeners
             serverSource.addEventListener('change', function() {
+                updateServerPath();
+            });
+            
+            targetPlatform.addEventListener('change', function() {
                 updateServerPath();
             });
             
@@ -786,22 +893,45 @@
             initializePage();
         }
         
-        // Config Form
-        document.getElementById('configForm').addEventListener('submit', (e) => {
-            e.preventDefault();
-            
+        // Function to generate MCP configuration
+        function generateMCPConfig() {
             const token = document.getElementById('mcpToken').value;
             const clientId = document.getElementById('clientId').value;
             const clientType = document.getElementById('clientType').value;
             const serverSource = document.getElementById('serverSource').value;
-            const serverPath = document.getElementById('serverPath').value.trim();
+            let serverPath = document.getElementById('serverPath').value.trim();
             const mykeysUrl = document.getElementById('mykeysUrl').value;
+            
+            // Get target platform
+            const targetPlatform = document.getElementById('targetPlatform').value;
+            let isWindows = false;
+            if (targetPlatform === 'auto') {
+                isWindows = navigator.platform.toLowerCase().includes('win');
+            } else {
+                isWindows = targetPlatform === 'windows';
+            }
+            
+            // If server path is empty and using hosted, set default path based on platform
+            if (!serverPath && serverSource === 'hosted') {
+                // Use Windows environment variable syntax that works in JSON configs
+                serverPath = isWindows 
+                    ? '%USERPROFILE%\\.mykeys\\mcp-server.js'
+                    : '~/.mykeys/mcp-server.js';
+                document.getElementById('serverPath').value = serverPath;
+            }
+            
+            // Normalize path: Replace PowerShell syntax with Windows env var syntax for JSON compatibility
+            // PowerShell uses $env:VAR, but JSON configs need %VAR% format
+            // This is critical - JSON configs cannot use PowerShell syntax!
+            if (isWindows) {
+                serverPath = serverPath.replace(/\$env:USERPROFILE/gi, '%USERPROFILE%');
+                serverPath = serverPath.replace(/\$env:([A-Z_]+)/gi, '%$1%'); // Handle any other $env: variables
+            }
             
             // Validate server path
             if (!serverPath || serverPath.trim() === '') {
                 const alertMessage = 'Please provide a server path. If using "Download from mykeys.zip", the path should be set automatically.';
                 alert(alertMessage);
-                e.preventDefault();
                 return false;
             }
             
@@ -844,7 +974,6 @@
             // Add download instructions if using hosted version
             let configOutput = JSON.stringify(config, null, 2);
             if (serverSource === 'hosted') {
-                const isWindows = navigator.platform.toLowerCase().includes('win');
                 let downloadInstructions;
                 if (isWindows) {
                     downloadInstructions = `// First, download the MCP server (PowerShell):
@@ -869,38 +998,57 @@ ${configOutput}`;
             generatedConfig = configOutput;
             document.getElementById('configOutput').textContent = generatedConfig;
             document.getElementById('configResult').classList.add('show');
+            return true;
+        }
+        
+        // Config Form
+        document.getElementById('configForm').addEventListener('submit', (e) => {
+            e.preventDefault();
+            generateMCPConfig();
         });
         
-        function copyToken() {
+        function copyToken(event) {
             if (generatedToken) {
                 navigator.clipboard.writeText(generatedToken).then(() => {
-                    const btn = event.target;
-                    const originalText = btn.textContent;
-                    btn.textContent = '✓ Copied!';
-                    btn.style.background = '#28a745';
-                    setTimeout(() => {
-                        btn.textContent = originalText;
-                        btn.style.background = '';
-                    }, 2000);
+                    const btn = event ? event.target : document.querySelector('button:has-text("Copy Token")');
+                    if (btn) {
+                        const originalText = btn.textContent;
+                        btn.textContent = '✓ Copied!';
+                        btn.style.background = '#28a745';
+                        setTimeout(() => {
+                            btn.textContent = originalText;
+                            btn.style.background = '';
+                        }, 2000);
+                    }
+                }).catch(err => {
+                    console.error('Failed to copy:', err);
+                    alert('Failed to copy token. Please copy manually.');
                 });
             }
         }
         
-        function copyConfig() {
+        function copyConfig(event) {
             if (generatedConfig) {
                 navigator.clipboard.writeText(generatedConfig).then(() => {
-                    const btn = event.target;
-                    const originalText = btn.textContent;
-                    btn.textContent = '✓ Copied!';
-                    btn.style.background = '#28a745';
-                    setTimeout(() => {
-                        btn.textContent = originalText;
-                        btn.style.background = '';
-                    }, 2000);
+                    const btn = event ? event.target : document.querySelector('.copy-btn');
+                    if (btn) {
+                        const originalText = btn.textContent;
+                        btn.textContent = '✓ Copied!';
+                        btn.style.background = '#28a745';
+                        setTimeout(() => {
+                            btn.textContent = originalText;
+                            btn.style.background = '';
+                        }, 2000);
+                    }
+                }).catch(err => {
+                    console.error('Failed to copy:', err);
+                    alert('Failed to copy configuration. Please copy manually.');
                 });
             }
         }
     </script>
+    </div>
+    <div id="shared-footer"></div>
 </body>
 </html>
 

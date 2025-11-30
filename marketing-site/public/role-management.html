@@ -1,0 +1,959 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Role Management - MyKeys.zip</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            margin: 0;
+            padding: 0;
+        }
+        
+        /* Header Styles */
+        .header {
+            background: white;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+        
+        .header .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 0 20px;
+        }
+        
+        .nav {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 20px 0;
+        }
+        
+        .logo {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            font-size: 24px;
+            font-weight: 700;
+            color: #333;
+            text-decoration: none;
+        }
+        
+        .logo-icon {
+            font-size: 32px;
+        }
+        
+        .logo-text {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+        
+        .nav-links {
+            display: flex;
+            gap: 32px;
+            align-items: center;
+        }
+        
+        .nav-links a {
+            color: #666;
+            font-weight: 500;
+            text-decoration: none;
+            transition: color 0.2s;
+            position: relative;
+        }
+        
+        .nav-links a:hover {
+            color: #667eea;
+        }
+        
+        /* Main Content */
+        .main {
+            flex: 1;
+            background: #f5f5f5;
+            padding: 40px 20px;
+        }
+        
+        .main .container {
+            max-width: 900px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            padding: 40px;
+        }
+        
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+        }
+        
+        h1 {
+            color: #333;
+            margin-bottom: 10px;
+            font-size: 32px;
+        }
+        
+        .subtitle {
+            color: #666;
+            margin-bottom: 30px;
+            font-size: 16px;
+        }
+        
+        .section {
+            margin-bottom: 40px;
+        }
+        
+        .section-title {
+            font-size: 20px;
+            color: #333;
+            margin-bottom: 20px;
+            padding-bottom: 10px;
+            border-bottom: 2px solid #eee;
+        }
+        
+        .form-group {
+            margin-bottom: 20px;
+        }
+        
+        label {
+            display: block;
+            margin-bottom: 8px;
+            color: #333;
+            font-weight: 500;
+        }
+        
+        input[type="email"],
+        input[type="text"] {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #ddd;
+            border-radius: 6px;
+            font-size: 16px;
+            transition: border-color 0.3s;
+        }
+        
+        input[type="email"]:focus,
+        input[type="text"]:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+        
+        .checkbox-group {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 20px;
+            margin-top: 10px;
+        }
+        
+        .checkbox-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        input[type="checkbox"] {
+            width: 20px;
+            height: 20px;
+            cursor: pointer;
+        }
+        
+        .checkbox-item label {
+            margin: 0;
+            cursor: pointer;
+            font-weight: normal;
+        }
+        
+        .role-badge {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: 600;
+            margin-right: 8px;
+        }
+        
+        .role-badge.owner {
+            background: #ff6b6b;
+            color: white;
+        }
+        
+        .role-badge.architect {
+            background: #4ecdc4;
+            color: white;
+        }
+        
+        .role-badge.member {
+            background: #95a5a6;
+            color: white;
+        }
+        
+        button {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 6px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+        
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+        }
+        
+        button:active {
+            transform: translateY(0);
+        }
+        
+        button:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+            transform: none;
+        }
+        
+        .btn-danger {
+            background: linear-gradient(135deg, #ff6b6b 0%, #ee5a6f 100%);
+        }
+        
+        .btn-danger:hover {
+            box-shadow: 0 4px 12px rgba(255, 107, 107, 0.4);
+        }
+        
+        .result-box {
+            margin-top: 20px;
+            padding: 16px;
+            border-radius: 6px;
+            border-left: 4px solid;
+            display: none;
+        }
+        
+        .result-box.show {
+            display: block;
+        }
+        
+        .result-box.success {
+            background: #d4edda;
+            border-left-color: #28a745;
+            color: #155724;
+        }
+        
+        .result-box.error {
+            background: #f8d7da;
+            border-left-color: #dc3545;
+            color: #721c24;
+        }
+        
+        .result-box h3 {
+            margin-bottom: 8px;
+            font-size: 16px;
+        }
+        
+        .users-list {
+            margin-top: 20px;
+        }
+        
+        .user-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 16px;
+            border: 1px solid #eee;
+            border-radius: 6px;
+            margin-bottom: 12px;
+            background: #f9f9f9;
+        }
+        
+        .user-info {
+            flex: 1;
+        }
+        
+        .user-email {
+            font-weight: 600;
+            color: #333;
+            margin-bottom: 8px;
+        }
+        
+        .user-actions {
+            display: flex;
+            gap: 10px;
+        }
+        
+        .loading {
+            display: inline-block;
+            width: 16px;
+            height: 16px;
+            border: 2px solid #f3f3f3;
+            border-top: 2px solid #667eea;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-left: 10px;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        .token-input-section {
+            background: #f9f9f9;
+            padding: 20px;
+            border-radius: 6px;
+            margin-bottom: 30px;
+        }
+        
+        .token-input-section h3 {
+            margin-bottom: 10px;
+            color: #333;
+        }
+        
+        .token-input-section p {
+            color: #666;
+            font-size: 14px;
+            margin-bottom: 15px;
+        }
+        /* Footer Styles */
+        .footer {
+            background: #1a1a1a;
+            color: white;
+            margin-top: auto;
+            padding: 60px 0 30px;
+        }
+        
+        .footer .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 0 20px;
+        }
+        
+        .footer-content {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 40px;
+            margin-bottom: 40px;
+        }
+        
+        .footer-section h3,
+        .footer-section h4 {
+            margin-bottom: 16px;
+            color: white;
+        }
+        
+        .footer-section p {
+            color: rgba(255, 255, 255, 0.8);
+            line-height: 1.6;
+        }
+        
+        .footer-section a {
+            display: block;
+            color: rgba(255, 255, 255, 0.7);
+            margin-bottom: 8px;
+            text-decoration: none;
+            transition: color 0.2s;
+        }
+        
+        .footer-section a:hover {
+            color: white;
+        }
+        
+        .footer-bottom {
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+            padding-top: 30px;
+            text-align: center;
+            color: rgba(255, 255, 255, 0.6);
+        }
+        
+        @media (max-width: 768px) {
+            .nav {
+                flex-direction: column;
+                gap: 20px;
+            }
+            
+            .nav-links {
+                flex-wrap: wrap;
+                justify-content: center;
+                gap: 20px;
+            }
+            
+            .footer-content {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+    <script src="/shared-layout.js"></script>
+</head>
+<body>
+    <div id="shared-header"></div>
+    <div class="main-content">
+        <div class="container">
+        <h1>👥 Role Management</h1>
+        <p class="subtitle">Manage user roles (owner, architect, member) for MyKeys.zip</p>
+        
+        <div class="token-input-section">
+            <h3>Authentication</h3>
+            <p>Sign in with Google to manage roles. Only owners and architects can manage roles.</p>
+            
+            <div id="googleAuthSection" style="display: block;">
+                <div class="form-group">
+                    <label>Sign in with Google *</label>
+                    <button type="button" onclick="signInWithGoogle()" style="width: 100%; margin-bottom: 15px;">
+                        <span id="googleSignInText">🔐 Sign in with Google</span>
+                    </button>
+                    <small style="color: #666; font-size: 12px; display: block; margin-top: 4px;">
+                        Your Google account email must have owner or architect role.
+                    </small>
+                </div>
+                
+                <div id="googleUserInfo" style="display: none; padding: 15px; background: #e8f5e9; border-radius: 6px; margin-bottom: 15px;">
+                    <div style="display: flex; align-items: center; gap: 10px;">
+                        <div style="width: 40px; height: 40px; border-radius: 50%; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); display: flex; align-items: center; justify-content: center; color: white; font-weight: 600; font-size: 18px;">
+                            {googleUserInfo.email ? googleUserInfo.email.charAt(0).toUpperCase() : 'U'}
+                        </div>
+                        <div>
+                            <div style="font-weight: 600; color: #333;">Signed in as:</div>
+                            <div style="font-size: 14px; color: #666;" id="userEmailDisplay"></div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div id="authError" class="result-box error" style="display: none;"></div>
+            </div>
+        </div>
+        
+        <div id="managementSection" style="display: none;">
+            <div class="section">
+                <h2 class="section-title">Set User Roles</h2>
+                <form id="setRolesForm" onsubmit="setRoles(event)">
+                    <div class="form-group">
+                        <label for="userEmail">Email Address *</label>
+                        <input type="email" id="userEmail" placeholder="user@example.com" required />
+                    </div>
+                    
+                    <div class="form-group">
+                        <label>Roles *</label>
+                        <div class="checkbox-group">
+                            <div class="checkbox-item">
+                                <input type="checkbox" id="roleOwner" value="owner" />
+                                <label for="roleOwner">Owner</label>
+                            </div>
+                            <div class="checkbox-item">
+                                <input type="checkbox" id="roleArchitect" value="architect" />
+                                <label for="roleArchitect">Architect</label>
+                            </div>
+                            <div class="checkbox-item">
+                                <input type="checkbox" id="roleMember" value="member" checked />
+                                <label for="roleMember">Member</label>
+                            </div>
+                        </div>
+                        <small style="color: #666; font-size: 12px; display: block; margin-top: 8px;">
+                            Note: All users automatically have the "member" role. Owners and architects can manage roles.
+                        </small>
+                    </div>
+                    
+                    <button type="submit">Set Roles</button>
+                </form>
+                
+                <div id="setRolesResult" class="result-box"></div>
+            </div>
+            
+            <div class="section">
+                <h2 class="section-title">All Users</h2>
+                <button onclick="loadAllUsers()" style="margin-bottom: 20px;">Refresh List</button>
+                <div id="usersList" class="users-list">
+                    <p style="color: #666;">Click "Refresh List" to load users.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <script src="https://accounts.google.com/gsi/client" async defer></script>
+    <script>
+        // Determine API base URL
+        // For localhost: try local server first, fallback to production
+        const API_BASE = window.API_BASE || (() => {
+            if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+                // Server runs on port 8080 by default (or PORT env var)
+                return 'http://localhost:8080';
+            }
+            return '';
+        })();
+        
+        let googleCredential = null;
+        let googleUserInfo = null;
+        
+        // Make accessible globally for debugging
+        window.googleCredential = googleCredential;
+        window.googleUserInfo = googleUserInfo;
+        
+        // Define showAuthError function before it's used
+        function showAuthError(message) {
+            const authErrorDiv = document.getElementById('authError');
+            if (authErrorDiv) {
+                authErrorDiv.innerHTML = `<h3>✗ Error</h3><p>${message}</p>`;
+                authErrorDiv.style.display = 'block';
+                authErrorDiv.classList.add('show');
+                // Scroll to error
+                authErrorDiv.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+            } else {
+                // Fallback to alert if element not found
+                console.error('Auth Error:', message);
+                alert('Authentication Error: ' + message);
+            }
+        }
+        
+        // Initialize Google Sign-In
+        window.onload = function() {
+            // Button is visible by default, check if Google OAuth is configured
+            fetch(`${API_BASE}/api/auth/google/url`)
+                .then(res => {
+                    if (!res.ok) {
+                        // 404 or other error - endpoint might not be deployed
+                        console.warn(`Google OAuth endpoint returned ${res.status}. This might mean:`);
+                        console.warn('  1. Google OAuth is not configured in production');
+                        console.warn('  2. The endpoint is not deployed yet');
+                        console.warn('  3. You need to configure Google OAuth credentials in Vercel');
+                        // Don't show error to user - let them try clicking the button
+                        return res.json().catch(() => ({ status: 'error', error: `HTTP ${res.status}` }));
+                    }
+                    return res.json();
+                })
+                .then(data => {
+                    if (data.status === 'success' && data.data && data.data.authUrl) {
+                        // Google OAuth is configured - button already visible
+                        console.log('Google OAuth is configured');
+                    } else {
+                        // Google OAuth not configured - log but don't show error (let user try)
+                        console.warn('Google OAuth not configured:', data.error || data.message);
+                    }
+                })
+                .catch(err => {
+                    // API call failed - might be localhost, show warning but keep button visible
+                    console.warn('Could not verify Google OAuth configuration:', err);
+                    // Button stays visible - user can try to sign in
+                });
+        };
+        
+        function signInWithGoogle() {
+            console.log('signInWithGoogle called');
+            console.log('API_BASE:', API_BASE);
+            console.log('google object:', typeof google !== 'undefined' ? google : 'undefined');
+            
+            // Try to get OAuth URL from server
+            fetch(`${API_BASE}/api/auth/google/url`)
+                .then(res => {
+                    console.log('Response status:', res.status);
+                    if (!res.ok) {
+                        // Handle 404 or other errors
+                        if (res.status === 404) {
+                            throw new Error('Google OAuth endpoint not found. The endpoint may not be deployed yet. Please check Vercel deployment and ensure Google OAuth credentials are configured.');
+                        }
+                        throw new Error(`HTTP ${res.status}: ${res.statusText}`);
+                    }
+                    return res.json();
+                })
+                .then(data => {
+                    console.log('OAuth URL response:', data);
+                    if (data.status === 'success' && data.data && data.data.authUrl) {
+                        // Use redirect flow
+                        console.log('Redirecting to:', data.data.authUrl);
+                        window.location.href = data.data.authUrl;
+                    } else {
+                        // Google OAuth not configured
+                        const errorMsg = data.error || data.message || 'Google OAuth not configured';
+                        console.error('OAuth not configured:', errorMsg);
+                        showAuthError(errorMsg);
+                    }
+                })
+                .catch(err => {
+                    console.error('Error fetching OAuth URL:', err);
+                    let errorMessage = 'Failed to connect to authentication server';
+                    
+                    if (err.message && err.message.includes('503')) {
+                        if (API_BASE.includes('localhost')) {
+                            const currentPort = window.location.port || (window.location.protocol === 'https:' ? '443' : '80');
+                            const redirectUri = `http://localhost:${currentPort}/oauth2callback`;
+                            errorMessage = `Google OAuth is not configured for localhost.\n\nTo fix:\n1. Add Google OAuth credentials to .env.local:\n   GOOGLE_OAUTH_CLIENT_ID=your-client-id\n   GOOGLE_OAUTH_CLIENT_SECRET=your-secret\n   GOOGLE_OAUTH_REDIRECT_URI=${redirectUri}\n\n2. Follow setup instructions in GOOGLE_OAUTH_SETUP.md\n\n3. Restart the server (npm start)\n\n4. Check server terminal - should NOT see OAuth warning`;
+                        } else {
+                            errorMessage = 'Google OAuth is not configured. Please configure Google OAuth credentials in Vercel environment variables.';
+                        }
+                    } else if (err.message && err.message.includes('404')) {
+                        if (API_BASE.includes('localhost')) {
+                            errorMessage = 'Google OAuth endpoint not found. Make sure:\n1. The Express server is running (npm start)\n2. Google OAuth credentials are set in .env.local\n3. The server is running on http://localhost:8080';
+                        } else {
+                            errorMessage = 'Google OAuth endpoint not found. The endpoint may not be deployed yet. Please check Vercel deployment and ensure Google OAuth credentials are configured.';
+                        }
+                    } else if (err.message && err.message.includes('Failed to fetch')) {
+                        if (API_BASE.includes('localhost')) {
+                            errorMessage = 'Cannot connect to local server. Make sure the Express server is running:\n\nnpm start\n\nThe server should run on http://localhost:8080';
+                        } else {
+                            errorMessage = 'Failed to connect to server. Please check your connection.';
+                        }
+                    } else if (err.message) {
+                        errorMessage = err.message;
+                    }
+                    
+                    showAuthError(errorMessage);
+                });
+        }
+        
+        function handleGoogleSignIn(response) {
+            // This is called when using Google Identity Services popup
+            googleCredential = response.credential;
+            window.googleCredential = googleCredential;
+            console.log('🔑 ID Token from GIS:', googleCredential ? googleCredential.substring(0, 20) + '...' : 'MISSING');
+            verifyGoogleToken(response.credential);
+        }
+        
+        // Handle OAuth callback (if using redirect flow)
+        window.addEventListener('DOMContentLoaded', function() {
+            const urlParams = new URLSearchParams(window.location.search);
+            const code = urlParams.get('code');
+            const error = urlParams.get('error');
+            
+            if (error) {
+                showResult('setRolesResult', 'error', `Google OAuth error: ${error}`);
+                return;
+            }
+            
+            if (code) {
+                verifyGoogleCode(code);
+            }
+        });
+        
+        async function verifyGoogleCode(code) {
+            try {
+                const response = await fetch(`${API_BASE}/api/auth/google/verify-admin`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ code })
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok && data.status === 'success' && data.data.hasAdminAccess) {
+                    googleUserInfo = data.data;
+                    // Store ID token if returned from server
+                    googleCredential = data.data.idToken;
+                    
+                    // Update window references
+                    window.googleCredential = googleCredential;
+                    window.googleUserInfo = googleUserInfo;
+                    
+                    console.log('🔑 ID Token received:', googleCredential ? googleCredential.substring(0, 20) + '...' : 'MISSING');
+                    console.log('📦 Response data:', JSON.stringify(data.data, null, 2));
+                    
+                    if (!googleCredential) {
+                        console.error('❌ Server did not return ID token. Response:', data);
+                        showResult('setRolesResult', 'error', 'Authentication incomplete: ID token not received. Please restart the server and try again.');
+                        return;
+                    }
+                    
+                    showGoogleUserInfo();
+                    document.getElementById('managementSection').style.display = 'block';
+                    showResult('setRolesResult', 'success', `✓ Authenticated as ${data.data.email} (${data.data.roles.join(', ')})`);
+                    loadAllUsers();
+                } else {
+                    showAuthError(data.error || data.message || 'You do not have permission to manage roles. Only owners and architects can manage roles.');
+                }
+            } catch (error) {
+                console.error('Google verification error:', error);
+                showAuthError(`Failed to verify Google: ${error.message}`);
+            }
+        }
+        
+        async function verifyGoogleToken(idToken) {
+            try {
+                const response = await fetch(`${API_BASE}/api/auth/google/verify-admin`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ idToken })
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok && data.status === 'success' && data.data.hasAdminAccess) {
+                    googleCredential = idToken;
+                    googleUserInfo = data.data;
+                    
+                    // Update window references
+                    window.googleCredential = googleCredential;
+                    window.googleUserInfo = googleUserInfo;
+                    
+                    console.log('🔑 ID Token stored:', googleCredential ? googleCredential.substring(0, 20) + '...' : 'MISSING');
+                    showGoogleUserInfo();
+                    document.getElementById('managementSection').style.display = 'block';
+                    showResult('setRolesResult', 'success', `✓ Authenticated as ${data.data.email} (${data.data.roles.join(', ')})`);
+                    loadAllUsers();
+                } else {
+                    showAuthError(data.error || data.message || 'You do not have permission to manage roles. Only owners and architects can manage roles.');
+                }
+            } catch (error) {
+                console.error('Google verification error:', error);
+                showAuthError(`Failed to verify Google: ${error.message}`);
+            }
+        }
+        
+        function showGoogleUserInfo() {
+            if (googleUserInfo) {
+                // Show user info (email only - no name/picture stored)
+                const userEmailDisplay = document.getElementById('userEmailDisplay');
+                if (userEmailDisplay) {
+                    userEmailDisplay.textContent = googleUserInfo.email;
+                }
+                
+                // Auto-populate the email input field in the form
+                const emailInput = document.getElementById('userEmail');
+                if (emailInput && emailInput.tagName === 'INPUT') {
+                    emailInput.value = googleUserInfo.email;
+                }
+                
+                // Show the user info section (simplified - just email)
+                document.getElementById('googleUserInfo').style.display = 'block';
+                document.getElementById('googleSignInText').textContent = '✓ Signed in';
+            }
+        }
+        
+        async function verifyGoogleAndToken() {
+            const token = document.getElementById('mcpToken').value.trim();
+            if (!token) {
+                alert('Please enter your MCP token');
+                return;
+            }
+            
+            if (!googleCredential && !googleUserInfo) {
+                alert('Please sign in with Google first');
+                return;
+            }
+            
+            try {
+                // Use ID token if available, otherwise use the code flow result
+                const idToken = googleCredential || (googleUserInfo ? null : null);
+                
+                const response = await fetch(`${API_BASE}/api/auth/google/verify-token-match`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        idToken: idToken,
+                        mcpToken: token
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok && data.status === 'success' && data.data.hasAdminAccess) {
+                    authToken = token;
+                    document.getElementById('managementSection').style.display = 'block';
+                    document.getElementById('mcpToken').disabled = true;
+                    document.getElementById('verifyButton').disabled = true;
+                    showResult('setRolesResult', 'success', `✓ Authenticated as ${data.data.email} (${data.data.roles.join(', ')})`);
+                    loadAllUsers();
+                } else {
+                    showResult('setRolesResult', 'error', data.error || data.message || 'Authentication failed. Your Google email must match the token email and you must have owner/architect role.');
+                }
+            } catch (error) {
+                console.error('Verification error:', error);
+                showResult('setRolesResult', 'error', `Failed to verify: ${error.message}`);
+            }
+        }
+        
+        
+        async function setRoles(event) {
+            event.preventDefault();
+            
+            if (!googleCredential && !googleUserInfo) {
+                alert('Please sign in with Google first');
+                return;
+            }
+            
+            const idToken = googleCredential;
+            console.log('🔍 setRoles called');
+            console.log('🔑 googleCredential:', idToken ? idToken.substring(0, 20) + '...' : 'NULL/UNDEFINED');
+            console.log('👤 googleUserInfo:', googleUserInfo);
+            
+            if (!idToken) {
+                console.error('❌ No ID token available');
+                showResult('setRolesResult', 'error', 'Google authentication expired. Please sign in again.');
+                return;
+            }
+            
+            const email = document.getElementById('userEmail').value.trim().toLowerCase();
+            const roles = [];
+            
+            if (document.getElementById('roleOwner').checked) roles.push('owner');
+            if (document.getElementById('roleArchitect').checked) roles.push('architect');
+            if (document.getElementById('roleMember').checked) roles.push('member');
+            
+            if (roles.length === 0) {
+                showResult('setRolesResult', 'error', 'Please select at least one role');
+                return;
+            }
+            
+            console.log('📤 Making API call to /api/admin/roles');
+            console.log('   Email:', email);
+            console.log('   Roles:', roles);
+            console.log('   ID Token present:', !!idToken);
+            
+            try {
+                const response = await fetch(`${API_BASE}/api/admin/roles`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-Google-ID-Token': idToken
+                    },
+                    body: JSON.stringify({ email, roles })
+                });
+                
+                console.log('📥 API Response status:', response.status);
+                
+                const data = await response.json();
+                
+                if (response.ok && data.status === 'success') {
+                    showResult('setRolesResult', 'success', `✓ Roles updated for ${email}: ${data.data.roles.join(', ')}`);
+                    document.getElementById('userEmail').value = '';
+                    document.getElementById('roleOwner').checked = false;
+                    document.getElementById('roleArchitect').checked = false;
+                    document.getElementById('roleMember').checked = true;
+                    loadAllUsers();
+                } else {
+                    showResult('setRolesResult', 'error', data.error || data.message || 'Failed to set roles');
+                }
+            } catch (error) {
+                console.error('Set roles error:', error);
+                showResult('setRolesResult', 'error', `Failed to set roles: ${error.message}`);
+            }
+        }
+        
+        async function loadAllUsers() {
+            if (!googleCredential && !googleUserInfo) return;
+            
+            const idToken = googleCredential;
+            if (!idToken) {
+                showResult('setRolesResult', 'error', 'Google authentication expired. Please sign in again.');
+                return;
+            }
+            
+            const usersList = document.getElementById('usersList');
+            usersList.innerHTML = '<p>Loading...</p>';
+            
+            try {
+                const response = await fetch(`${API_BASE}/api/admin/roles`, {
+                    method: 'GET',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-Google-ID-Token': idToken
+                    }
+                });
+                
+                const data = await response.json();
+                
+                if (!response.ok) {
+                    console.error('loadAllUsers API error:', response.status, data);
+                    if (response.status === 401) {
+                        usersList.innerHTML = `<p style="color: #dc3545;">Error: Authentication required. Please sign in again.</p>`;
+                        showResult('setRolesResult', 'error', 'Authentication expired. Please sign in again.');
+                        return;
+                    }
+                }
+                
+                if (response.ok && data.status === 'success' && data.data.users) {
+                    if (data.data.users.length === 0) {
+                        usersList.innerHTML = '<p style="color: #666;">No users found.</p>';
+                        return;
+                    }
+                    
+                    usersList.innerHTML = data.data.users.map(user => `
+                        <div class="user-item">
+                            <div class="user-info">
+                                <div class="user-email">${user.email}</div>
+                                <div>
+                                    ${user.roles.map(role => `<span class="role-badge ${role}">${role}</span>`).join('')}
+                                </div>
+                            </div>
+                            <div class="user-actions">
+                                <button class="btn-danger" onclick="resetUserRoles('${user.email}')">Reset to Member</button>
+                            </div>
+                        </div>
+                    `).join('');
+                } else {
+                    usersList.innerHTML = `<p style="color: #dc3545;">Error: ${data.error || data.message || 'Failed to load users'}</p>`;
+                }
+            } catch (error) {
+                console.error('Load users error:', error);
+                usersList.innerHTML = `<p style="color: #dc3545;">Failed to load users: ${error.message}</p>`;
+            }
+        }
+        
+        async function resetUserRoles(email) {
+            if (!googleCredential && !googleUserInfo) return;
+            if (!confirm(`Reset ${email} to member role only?`)) return;
+            
+            const idToken = googleCredential;
+            if (!idToken) {
+                showResult('setRolesResult', 'error', 'Google authentication expired. Please sign in again.');
+                return;
+            }
+            
+            try {
+                const response = await fetch(`${API_BASE}/api/admin/roles/${encodeURIComponent(email)}`, {
+                    method: 'DELETE',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-Google-ID-Token': idToken
+                    }
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok && data.status === 'success') {
+                    showResult('setRolesResult', 'success', `✓ ${email} reset to member role`);
+                    loadAllUsers();
+                } else {
+                    showResult('setRolesResult', 'error', data.error || data.message || 'Failed to reset roles');
+                }
+            } catch (error) {
+                console.error('Reset roles error:', error);
+                showResult('setRolesResult', 'error', `Failed to reset roles: ${error.message}`);
+            }
+        }
+        
+        function showResult(elementId, type, message) {
+            const element = document.getElementById(elementId);
+            element.className = `result-box show ${type}`;
+            element.innerHTML = `<h3>${type === 'success' ? '✓ Success' : '✗ Error'}</h3><p>${message}</p>`;
+            
+            if (type === 'success') {
+                setTimeout(() => {
+                    element.classList.remove('show');
+                }, 5000);
+            }
+        }
+    </script>
+        </div>
+    </div>
+    <div id="shared-footer"></div>
+</body>
+</html>
+
