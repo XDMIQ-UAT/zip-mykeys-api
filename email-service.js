@@ -41,7 +41,9 @@ function getSESClient() {
   try {
     AWS_REGION = region;
     // Check SES_SENDER_EMAIL (already set in Vercel) or fallback to SES_FROM_EMAIL
-    DEFAULT_SENDER = process.env.SES_SENDER_EMAIL || process.env.SES_FROM_EMAIL || 'hello@cosmiciq.org';
+    // Trim whitespace (including \r\n) that might be present in environment variables
+    const senderEmail = process.env.SES_SENDER_EMAIL || process.env.SES_FROM_EMAIL || 'hello@cosmiciq.org';
+    DEFAULT_SENDER = senderEmail.trim();
     
     sesClient = new SESClient({
       region: AWS_REGION,

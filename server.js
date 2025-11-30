@@ -1365,7 +1365,9 @@ app.get('/api/email/status', (req, res) => {
     const hasAccessKey = !!process.env.AWS_ACCESS_KEY_ID;
     const hasSecretKey = !!process.env.AWS_SECRET_ACCESS_KEY;
     const region = process.env.AWS_REGION || 'us-east-1';
-    const senderEmail = process.env.SES_SENDER_EMAIL || process.env.SES_FROM_EMAIL || 'hello@cosmiciq.org';
+    // Trim whitespace (including \r\n) that might be present in environment variables
+    const senderEmailRaw = process.env.SES_SENDER_EMAIL || process.env.SES_FROM_EMAIL || 'hello@cosmiciq.org';
+    const senderEmail = senderEmailRaw.trim();
     
     // Check if email service can initialize
     let canInitialize = false;
