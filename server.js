@@ -380,7 +380,23 @@ app.get('/mcp-config-generator.html', (req, res) => {
   res.setHeader('Expires', '0');
   res.setHeader('X-Deployment-Verification', 'v2.1.0-deploy-verify');
   const filePath = path.join(__dirname, 'public', 'mcp-config-generator.html');
-  console.log('[mcp-config-generator] Serving file from:', filePath);
+  const fs = require('fs');
+  
+  // Verify file exists and log details
+  if (fs.existsSync(filePath)) {
+    const stats = fs.statSync(filePath);
+    const fileContent = fs.readFileSync(filePath, 'utf8');
+    const hasDeploymentLog = fileContent.includes('Deployment Active');
+    console.log('[mcp-config-generator] File exists:', filePath);
+    console.log('[mcp-config-generator] File size:', stats.size, 'bytes');
+    console.log('[mcp-config-generator] Has deployment log:', hasDeploymentLog);
+    console.log('[mcp-config-generator] File modified:', stats.mtime);
+  } else {
+    console.error('[mcp-config-generator] File NOT FOUND:', filePath);
+    console.error('[mcp-config-generator] __dirname:', __dirname);
+    console.error('[mcp-config-generator] Current working directory:', process.cwd());
+  }
+  
   res.sendFile(filePath);
 });
 
