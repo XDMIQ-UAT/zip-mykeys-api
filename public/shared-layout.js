@@ -158,8 +158,8 @@ try {
             color: white;
             margin-top: auto;
             padding: 60px 0 30px;
-            width: 100% !important;
-            max-width: 100% !important;
+            width: 100vw !important;
+            max-width: 100vw !important;
             margin-left: 0 !important;
             margin-right: 0 !important;
             left: 0 !important;

@@ -51,11 +51,19 @@
             overflow-x: hidden !important;
         }
         
-        /* Header and footer - let JavaScript handle full width */
+        /* Header and footer - force full width in CSS too */
         body.has-shared-layout .header,
         body.has-shared-layout .footer {
+            width: 100vw !important;
+            max-width: 100vw !important;
+            margin-left: 0 !important;
+            margin-right: 0 !important;
+            padding-left: 0 !important;
+            padding-right: 0 !important;
             flex-shrink: 0 !important;
             z-index: 1 !important;
+            position: relative !important;
+            box-sizing: border-box !important;
         }
         
         /* Header specific styling */
