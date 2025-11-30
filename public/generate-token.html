@@ -410,7 +410,7 @@
             <h3 id="resultTitle"></h3>
             <p id="resultMessage"></p>
             <div id="tokenDisplay"></div>
-            <button class="copy-btn" id="copyBtn" onclick="copyToken()">Copy Token</button>
+            <button class="copy-btn" id="copyBtn" onclick="copyToken()" style="display: none;">Copy Token</button>
         </div>
     </div>
     
@@ -692,11 +692,18 @@
                     throw new Error(data.error || data.message || 'Failed to send verification code');
                 }
             } catch (error) {
-                tokenResult.classList.remove('success');
+                tokenResult.classList.remove('success', 'show');
                 tokenResult.classList.add('error');
                 resultTitle.textContent = '❌ Failed to Send Code';
                 resultMessage.textContent = error.message || 'Failed to send verification code. Please try again.';
                 tokenDisplay.innerHTML = '';
+                
+                // Hide copy button when there's an error (no token to copy)
+                const copyBtn = document.getElementById('copyBtn');
+                if (copyBtn) {
+                    copyBtn.style.display = 'none';
+                }
+                
                 tokenResult.classList.add('show');
             } finally {
                 loading.classList.remove('show');
