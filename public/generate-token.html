@@ -25,6 +25,9 @@
         body.has-shared-layout {
             display: flex;
             flex-direction: column;
+            padding-left: 0;
+            padding-right: 0;
+            padding-bottom: 0;
         }
         
         .main-content {
@@ -32,7 +35,15 @@
             display: flex;
             align-items: center;
             justify-content: center;
-            padding: 20px 0;
+            padding: 20px;
+        }
+        
+        /* Header and footer should span full width */
+        body.has-shared-layout .header,
+        body.has-shared-layout .footer {
+            width: 100%;
+            margin-left: 0;
+            margin-right: 0;
         }
         
         .container {

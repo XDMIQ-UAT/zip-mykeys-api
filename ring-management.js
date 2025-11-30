@@ -14,81 +14,100 @@ const RINGS_KEY = 'rings';
 const FIRST_EMAIL = 'bcherrman@gmail.com'; // Always known first email
 
 /**
- * Validate that a ring meets role requirements
- * @param {Object} ringRoles - Object mapping email -> roles array
- * @returns {Object} - { valid: boolean, reason?: string }
+ * Extract domain from email address (for metadata/analytics only)
+ * @param {string} email - Email address
+ * @returns {string|null} - Domain or null if invalid
  */
-function validateRingRoles(ringRoles) {
-  const emails = Object.keys(ringRoles);
+function extractDomain(email) {
+  if (!email) return null;
+  const parts = email.trim().toLowerCase().split('@');
+  if (parts.length !== 2) return null;
+  return parts[1];
+}
+
+/**
+ * Get primary domain from a set of emails (most common domain)
+ * Used for metadata/analytics, not for access control
+ * @param {string[]} emails - Array of email addresses
+ * @returns {string|null} - Most common domain or null
+ */
+function getPrimaryDomain(emails) {
+  if (!emails || emails.length === 0) return null;
   
-  if (emails.length === 0) {
-    return { valid: false, reason: 'Ring must have at least one member' };
-  }
-  
-  // Count role coverage
-  const hasOwner = emails.some(email => ringRoles[email].includes('owner'));
-  const hasArchitect = emails.some(email => ringRoles[email].includes('architect'));
-  const hasMember = emails.some(email => ringRoles[email].includes('member'));
-  
-  if (!hasOwner || !hasArchitect || !hasMember) {
-    return { 
-      valid: false, 
-      reason: 'Ring must have at least one owner, one architect, and one member' 
-    };
-  }
-  
-  // Check for valid configurations
-  // Option 1: One person with all 3 roles
-  const hasAllThree = emails.some(email => 
-    ringRoles[email].includes('owner') &&
-    ringRoles[email].includes('architect') &&
-    ringRoles[email].includes('member')
-  );
-  
-  if (hasAllThree) {
-    return { valid: true };
-  }
-  
-  // Option 2: Count role distribution
-  const roleCounts = {
-    owner: emails.filter(email => ringRoles[email].includes('owner')).length,
-    architect: emails.filter(email => ringRoles[email].includes('architect')).length,
-    member: emails.filter(email => ringRoles[email].includes('member')).length,
-  };
-  
-  // Count people with multiple roles
-  const peopleWithMultipleRoles = emails.filter(email => {
-    const roles = ringRoles[email];
-    return roles.length >= 2;
-  }).length;
-  
-  const peopleWithSingleRole = emails.filter(email => {
-    const roles = ringRoles[email];
-    return roles.length === 1;
-  }).length;
-  
-  // Option 2: 2 people with 2 roles each + 1 person with 1 role
-  if (peopleWithMultipleRoles >= 2 && peopleWithSingleRole >= 1) {
-    // Verify the 2 people with multiple roles cover all 3 roles
-    const multiRoleEmails = emails.filter(email => ringRoles[email].length >= 2);
-    const coveredRoles = new Set();
-    multiRoleEmails.forEach(email => {
-      ringRoles[email].forEach(role => coveredRoles.add(role));
-    });
-    
-    if (coveredRoles.has('owner') && coveredRoles.has('architect') && coveredRoles.has('member')) {
-      return { valid: true };
+  const domainCounts = {};
+  for (const email of emails) {
+    const domain = extractDomain(email);
+    if (domain) {
+      domainCounts[domain] = (domainCounts[domain] || 0) + 1;
     }
   }
   
-  // Option 3: 3 people where each has one role individually
-  if (peopleWithSingleRole >= 3 && roleCounts.owner >= 1 && roleCounts.architect >= 1 && roleCounts.member >= 1) {
-    return { valid: true };
+  // Return most common domain
+  let maxCount = 0;
+  let primaryDomain = null;
+  for (const [domain, count] of Object.entries(domainCounts)) {
+    if (count > maxCount) {
+      maxCount = count;
+      primaryDomain = domain;
+    }
   }
   
-  return { 
-    valid: false, 
-    reason: 'Ring must have: (1) one person with all 3 roles, OR (2) two people with 2 roles each + one person with 1 role covering all roles, OR (3) three people each with one role (owner, architect, member)' 
+  return primaryDomain;
+}
+
+/**
+ * Entity types for HIPAA compliance and separation of concerns
+ */
+const ENTITY_TYPES = {
+  PERSON: 'person',    // Human user
+  AGENT: 'agent',      // AI agent/bot
+  BOT: 'bot'           // Automated system
+};
+
+/**
+ * Simplified roles: admin (full access) and member (read/write)
+ * @param {Object} ringRoles - Object mapping identifier -> { role, entityType }
+ * @returns {Object} - { valid: boolean, reason?: string }
+ */
+function validateRingRoles(ringRoles) {
+  const identifiers = Object.keys(ringRoles);
+  
+  if (identifiers.length === 0) {
+    return { valid: false, reason: 'Ring must have at least one member' };
+  }
+  
+  // Must have at least one admin
+  const hasAdmin = identifiers.some(id => {
+    const member = ringRoles[id];
+    return (typeof member === 'string' && member === 'admin') || 
+           (typeof member === 'object' && member.role === 'admin');
+  });
+  
+  if (!hasAdmin) {
+    return { 
+      valid: false, 
+      reason: 'Ring must have at least one admin' 
+    };
+  }
+  
+  return { valid: true };
+}
+
+/**
+ * Normalize member data to object format
+ * @param {string|Object} memberData - Role string or member object
+ * @returns {Object} - Normalized member object
+ */
+function normalizeMember(memberData) {
+  if (typeof memberData === 'string') {
+    return {
+      role: memberData,
+      entityType: ENTITY_TYPES.PERSON // Default to person
+    };
+  }
+  return {
+    role: memberData.role || 'member',
+    entityType: memberData.entityType || ENTITY_TYPES.PERSON
   };
 }
 
@@ -127,18 +146,23 @@ async function getRingForEmail(email) {
 }
 
 /**
- * Create a new ring
- * @param {string} ringId - Unique ring identifier (optional, auto-generated if not provided)
- * @param {string} firstEmail - First email for the ring (required)
- * @param {Object} initialRoles - Initial roles mapping { email: [roles] }
+ * Create a new ring (project/team/family)
+ * Simplified: admin/member roles, supports people/agents/bots
+ * HIPAA-compliant separation of concerns
+ * @param {string} ringId - Unique ring identifier (optional, auto-generated)
+ * @param {string} firstIdentifier - First member identifier (email or token)
+ * @param {Object} initialMembers - Initial members { identifier: { role, entityType } }
+ * @param {string} createdBy - Identifier of creator (for ownership tracking)
+ * @param {Object} metadata - Optional metadata (label, description, tags, type)
  * @returns {Promise<Object>} - Created ring object
  */
-async function createRing(ringId = null, firstEmail = FIRST_EMAIL, initialRoles = null) {
-  if (!firstEmail) {
-    throw new Error('First email is required');
+async function createRing(ringId = null, firstIdentifier = FIRST_EMAIL, initialMembers = null, createdBy = null, metadata = {}) {
+  if (!firstIdentifier) {
+    throw new Error('First member identifier is required');
   }
   
-  firstEmail = firstEmail.trim().toLowerCase();
+  firstIdentifier = firstIdentifier.trim().toLowerCase();
+  const creatorIdentifier = (createdBy || firstIdentifier).trim().toLowerCase();
   
   try {
     const kv = getKV();
@@ -146,30 +170,35 @@ async function createRing(ringId = null, firstEmail = FIRST_EMAIL, initialRoles 
       throw new Error('KV storage not available');
     }
     
-    // Generate ring ID if not provided
+    // Generate ring ID if not provided (token-based identifier)
     if (!ringId) {
       ringId = `ring-${Date.now()}-${Math.random().toString(36).substring(7)}`;
     }
     
-    // Initialize roles - if not provided, give first email all roles
-    const roles = initialRoles || {
-      [firstEmail]: ['owner', 'architect', 'member']
+    // Initialize members - if not provided, make first member admin
+    const members = initialMembers || {
+      [firstIdentifier]: { role: 'admin', entityType: ENTITY_TYPES.PERSON }
     };
     
-    // Ensure first email is included
-    if (!roles[firstEmail]) {
-      roles[firstEmail] = ['owner', 'architect', 'member'];
+    // Ensure first member is included as admin
+    if (!members[firstIdentifier]) {
+      members[firstIdentifier] = { role: 'admin', entityType: ENTITY_TYPES.PERSON };
     }
     
-    // Validate ring roles
-    const validation = validateRingRoles(roles);
+    // Normalize all members to object format
+    const normalizedMembers = {};
+    for (const [identifier, memberData] of Object.entries(members)) {
+      normalizedMembers[identifier] = normalizeMember(memberData);
+    }
+    
+    // Validate ring (must have at least one admin)
+    const validation = validateRingRoles(normalizedMembers);
     if (!validation.valid) {
       throw new Error(`Invalid ring configuration: ${validation.reason}`);
     }
     
     // Get existing rings
     const ringsData = await kv.get(RINGS_KEY);
-    // Handle both string and object responses from KV
     const rings = ringsData ? (typeof ringsData === 'string' ? JSON.parse(ringsData) : ringsData) : {};
     
     // Check if ring ID already exists
@@ -177,19 +206,30 @@ async function createRing(ringId = null, firstEmail = FIRST_EMAIL, initialRoles 
       throw new Error(`Ring ${ringId} already exists`);
     }
     
-    // Create ring object
+    // Calculate primary domain from email identifiers (for metadata/analytics)
+    const emailIdentifiers = Object.keys(normalizedMembers).filter(id => id.includes('@'));
+    const primaryDomain = getPrimaryDomain(emailIdentifiers);
+    
+    // Create ring object - simplified structure
     const ring = {
-      id: ringId,
-      firstEmail: firstEmail,
+      id: ringId, // Token-based identifier
+      firstMember: firstIdentifier,
+      domain: primaryDomain || null, // Metadata only
+      createdBy: creatorIdentifier, // Ownership tracking
+      type: metadata.type || 'project', // project/team/family
+      label: metadata.label || null, // Human-readable label
+      description: metadata.description || null,
+      tags: metadata.tags || [],
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
       members: {}
     };
     
-    // Add members with roles
-    for (const [email, emailRoles] of Object.entries(roles)) {
-      ring.members[email] = {
-        roles: emailRoles,
+    // Add members with normalized data
+    for (const [identifier, memberData] of Object.entries(normalizedMembers)) {
+      ring.members[identifier] = {
+        role: memberData.role,
+        entityType: memberData.entityType,
         addedAt: new Date().toISOString()
       };
     }
@@ -198,10 +238,54 @@ async function createRing(ringId = null, firstEmail = FIRST_EMAIL, initialRoles 
     rings[ringId] = ring;
     await kv.set(RINGS_KEY, JSON.stringify(rings));
     
+    // Audit log for HIPAA compliance
+    await logAuditEvent('ring_created', {
+      ringId,
+      createdBy: creatorIdentifier,
+      memberCount: Object.keys(ring.members).length
+    });
+    
     return ring;
   } catch (error) {
     console.error('[ring-management] Error creating ring:', error.message);
     throw error;
+  }
+}
+
+/**
+ * Log audit event for HIPAA compliance
+ * @param {string} eventType - Type of event
+ * @param {Object} eventData - Event data
+ */
+async function logAuditEvent(eventType, eventData) {
+  try {
+    const kv = getKV();
+    if (!kv) return;
+    
+    const auditKey = `audit:${Date.now()}-${Math.random().toString(36).substring(7)}`;
+    const auditEntry = {
+      eventType,
+      timestamp: new Date().toISOString(),
+      ...eventData
+    };
+    
+    await kv.set(auditKey, JSON.stringify(auditEntry));
+    
+    // Also maintain a recent audit log list (last 1000 events)
+    const auditListKey = 'audit:recent';
+    const auditList = await kv.get(auditListKey);
+    const recentAudits = auditList ? JSON.parse(auditList) : [];
+    recentAudits.push(auditEntry);
+    
+    // Keep only last 1000 events
+    if (recentAudits.length > 1000) {
+      recentAudits.shift();
+    }
+    
+    await kv.set(auditListKey, JSON.stringify(recentAudits));
+  } catch (error) {
+    console.error('[ring-management] Error logging audit event:', error.message);
+    // Don't throw - audit logging shouldn't break operations
   }
 }
 
@@ -251,6 +335,7 @@ async function getAllRings() {
 
 /**
  * Update ring members and roles
+ * Rings are flexible - any email addresses allowed
  * @param {string} ringId - Ring ID
  * @param {Object} roles - Updated roles mapping { email: [roles] }
  * @returns {Promise<Object>} - Updated ring object
@@ -284,13 +369,13 @@ async function updateRingRoles(ringId, roles) {
       roles[ring.firstEmail] = ring.members[ring.firstEmail]?.roles || ['member'];
     }
     
-    // Validate ring roles
+    // Validate ring roles (must maintain owner/architect/member coverage)
     const validation = validateRingRoles(roles);
     if (!validation.valid) {
       throw new Error(`Invalid ring configuration: ${validation.reason}`);
     }
     
-    // Update members
+    // Update members (any email addresses allowed)
     ring.members = {};
     for (const [email, emailRoles] of Object.entries(roles)) {
       const existingMember = rings[ringId].members[email];
@@ -300,6 +385,10 @@ async function updateRingRoles(ringId, roles) {
         updatedAt: new Date().toISOString()
       };
     }
+    
+    // Update primary domain metadata (recalculate most common domain)
+    const allEmails = Object.keys(ring.members);
+    ring.domain = getPrimaryDomain(allEmails) || ring.domain;
     
     ring.updatedAt = new Date().toISOString();
     
@@ -316,17 +405,20 @@ async function updateRingRoles(ringId, roles) {
 
 /**
  * Add member to ring
+ * Supports people/agents/bots - any identifier can join
  * @param {string} ringId - Ring ID
- * @param {string} email - Email to add
- * @param {string[]} roles - Roles to assign (defaults to ['member'])
+ * @param {string} identifier - Member identifier (email or token)
+ * @param {string|Object} memberData - Role string ('admin'/'member') or { role, entityType }
+ * @param {string} addedBy - Identifier of user adding member (for audit)
  * @returns {Promise<Object>} - Updated ring object
  */
-async function addRingMember(ringId, email, roles = ['member']) {
-  if (!ringId || !email) {
-    throw new Error('Ring ID and email are required');
+async function addRingMember(ringId, identifier, memberData = 'member', addedBy = null) {
+  if (!ringId || !identifier) {
+    throw new Error('Ring ID and identifier are required');
   }
   
-  email = email.trim().toLowerCase();
+  identifier = identifier.trim().toLowerCase();
+  const normalizedMember = normalizeMember(memberData);
   
   try {
     const kv = getKV();
@@ -339,7 +431,6 @@ async function addRingMember(ringId, email, roles = ['member']) {
       throw new Error(`Ring ${ringId} not found`);
     }
     
-    // Handle both string and object responses from KV
     const rings = typeof ringsData === 'string' ? JSON.parse(ringsData) : ringsData;
     const ring = rings[ringId];
     
@@ -347,31 +438,48 @@ async function addRingMember(ringId, email, roles = ['member']) {
       throw new Error(`Ring ${ringId} not found`);
     }
     
-    // Get current roles
-    const currentRoles = {};
-    for (const [memberEmail, memberData] of Object.entries(ring.members)) {
-      currentRoles[memberEmail] = memberData.roles;
+    // Get current members
+    const currentMembers = {};
+    for (const [id, member] of Object.entries(ring.members)) {
+      currentMembers[id] = {
+        role: member.role || 'member',
+        entityType: member.entityType || ENTITY_TYPES.PERSON
+      };
     }
     
     // Add new member
-    currentRoles[email] = roles;
+    currentMembers[identifier] = normalizedMember;
     
-    // Validate ring roles
-    const validation = validateRingRoles(currentRoles);
+    // Validate ring (must maintain at least one admin)
+    const validation = validateRingRoles(currentMembers);
     if (!validation.valid) {
       throw new Error(`Adding this member would make ring invalid: ${validation.reason}`);
     }
     
     // Update ring
-    ring.members[email] = {
-      roles: roles,
+    ring.members[identifier] = {
+      role: normalizedMember.role,
+      entityType: normalizedMember.entityType,
       addedAt: new Date().toISOString()
     };
+    
+    // Update primary domain metadata
+    const emailIdentifiers = Object.keys(ring.members).filter(id => id.includes('@'));
+    ring.domain = getPrimaryDomain(emailIdentifiers) || ring.domain;
     
     ring.updatedAt = new Date().toISOString();
     
     rings[ringId] = ring;
     await kv.set(RINGS_KEY, JSON.stringify(rings));
+    
+    // Audit log
+    await logAuditEvent('member_added', {
+      ringId,
+      identifier,
+      role: normalizedMember.role,
+      entityType: normalizedMember.entityType,
+      addedBy: addedBy || 'system'
+    });
     
     return ring;
   } catch (error) {
@@ -446,24 +554,30 @@ async function removeRingMember(ringId, email) {
 }
 
 /**
- * Get roles for an email within a specific ring
+ * Get role for an identifier within a specific ring
  * @param {string} ringId - Ring ID
- * @param {string} email - User email address
- * @returns {Promise<string[]>} - Array of roles
+ * @param {string} identifier - Member identifier (email or token)
+ * @returns {Promise<Object|null>} - Member data { role, entityType } or null
  */
-async function getRingMemberRoles(ringId, email) {
-  if (!ringId || !email) return [];
+async function getRingMemberRoles(ringId, identifier) {
+  if (!ringId || !identifier) return null;
   
-  email = email.trim().toLowerCase();
+  identifier = identifier.trim().toLowerCase();
   
   try {
     const ring = await getRing(ringId);
-    if (!ring) return [];
+    if (!ring) return null;
     
-    return ring.members[email]?.roles || [];
+    const member = ring.members[identifier];
+    if (!member) return null;
+    
+    return {
+      role: member.role || 'member',
+      entityType: member.entityType || ENTITY_TYPES.PERSON
+    };
   } catch (error) {
     console.error('[ring-management] Error getting ring member roles:', error.message);
-    return [];
+    return null;
   }
 }
 
@@ -497,6 +611,42 @@ async function initializeDefaultRing() {
   }
 }
 
+/**
+ * Check if a user can own or architect a ring
+ * Users can only own/architect rings they created (their referrals) or rings created when Google auth generated a record for them
+ * Domain is not used for this check - rings are flexible mesh networks
+ * @param {string} email - User email
+ * @param {string} ringId - Ring ID
+ * @returns {Promise<boolean>} - True if user can own/architect the ring
+ */
+async function canUserOwnRing(email, ringId) {
+  if (!email || !ringId) return false;
+  
+  email = email.trim().toLowerCase();
+  
+  try {
+    const ring = await getRing(ringId);
+    if (!ring) return false;
+    
+    // User can own/architect if they created the ring
+    if (ring.createdBy === email) {
+      return true;
+    }
+    
+    // User can own/architect if they are the first email (ring creator)
+    if (ring.firstEmail === email) {
+      return true;
+    }
+    
+    // Otherwise, check if user is already an owner/architect (grandfathered in)
+    const memberRoles = ring.members[email]?.roles || [];
+    return memberRoles.includes('owner') || memberRoles.includes('architect');
+  } catch (error) {
+    console.error('[ring-management] Error checking ring ownership:', error.message);
+    return false;
+  }
+}
+
 module.exports = {
   validateRingRoles,
   getRingForEmail,
@@ -508,6 +658,12 @@ module.exports = {
   removeRingMember,
   getRingMemberRoles,
   initializeDefaultRing,
+  canUserOwnRing,
+  extractDomain,
+  getPrimaryDomain,
+  normalizeMember,
+  logAuditEvent,
+  ENTITY_TYPES,
   FIRST_EMAIL,
 };
 

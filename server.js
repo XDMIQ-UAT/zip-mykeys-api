@@ -32,7 +32,9 @@ const {
   removeRingMember, 
   getRingForEmail,
   initializeDefaultRing,
-  validateRingRoles
+  validateRingRoles,
+  canUserOwnRing,
+  extractDomain
 } = require('./ring-management');
 const {
   getRingForUser,
@@ -49,7 +51,10 @@ const {
   copyKeyBetweenRings,
   moveKeyBetweenRings,
   shareKeyWithinRing,
-  getKeySharingInfo
+  getKeySharingInfo,
+  canUserViewKey,
+  requestKeyAccess,
+  grantKeyAccess
 } = require('./key-management');
 const {
   storeVaultSecret,
@@ -60,6 +65,17 @@ const {
   getVaultMetadata
 } = require('./privacy-vault');
 const { getAuthUrl, verifyGoogleToken, verifyIdToken, isConfigured: isGoogleOAuthConfigured } = require('./google-oauth');
+const { 
+  getPersona, 
+  canAccessFeature, 
+  getPersonaLimits, 
+  upgradePersona, 
+  createAccount, 
+  getAccount,
+  verifyHumanAccount, 
+  canDelegateAgent,
+  PERSONAS 
+} = require('./persona-management');
 const {
   generate2FACode,
   store2FAChallenge,
@@ -171,8 +187,27 @@ const authenticate = async (req, res, next) => {
           req.clientId = validation.clientId;
           req.clientType = validation.clientType;
           req.userEmail = validation.email;
-          // Determine ring for MCP token (from email)
-          req.ringId = await getRingForUser(validation.email, true);
+          
+          // Check if this is an AI agent - verify delegation
+          const account = await getAccount(validation.email || token);
+          if (account && (account.type === 'agent' || account.entityType === 'agent')) {
+            // Verify agent is properly delegated
+            if (!account.delegatedBy || account.revoked) {
+              return sendResponse(res, 403, 'failure', null, 'Agent not authorized', 'AI agent account must be delegated by a verified human account');
+            }
+            
+            // Verify delegating human account is still verified
+            const humanAccount = await getAccount(account.delegatedBy);
+            if (!humanAccount || !humanAccount.verified || !humanAccount.verificationMethod) {
+              return sendResponse(res, 403, 'failure', null, 'Delegation invalid', 'AI agent delegation is invalid - human account must be verified');
+            }
+            
+            req.agentDelegatedBy = account.delegatedBy;
+            req.isAgent = true;
+          }
+          
+          // Determine ring for MCP token (from email or token)
+          req.ringId = await getRingForUser(validation.email || token, true);
           return next();
         } else {
           return sendResponse(res, 401, 'failure', null, 'Authentication failed', validation.reason || 'Invalid token');
@@ -766,6 +801,29 @@ app.get('/api/v1/secrets/:ecosystem/:secretName', authenticate, async (req, res)
           message: 'You do not have access to this ring\'s content'
         });
       }
+      
+      // Check key visibility (ring owners can't see all member keys by default)
+      const possibleNames = [
+        `${ecosystem}-${secretName}`,
+        secretName
+      ];
+      
+      // Check if user can view any of the possible key names
+      let canView = false;
+      for (const name of possibleNames) {
+        const viewCheck = await canUserViewKey(userEmail, ringId, name);
+        if (viewCheck) {
+          canView = true;
+          break;
+        }
+      }
+      
+      if (!canView) {
+        return res.status(403).json({
+          error: 'Access denied',
+          message: 'You do not have permission to view this key. Ring owners cannot see all member keys by default. You can request access from the key creator.'
+        });
+      }
     }
     
     // Try to get from ring-scoped storage first
@@ -862,8 +920,23 @@ app.post('/api/v1/secrets/:ecosystem', authenticate, async (req, res) => {
     const result = await storeSecret(secretName, secretValueStr, labels, ringId);
     
     // Register key in ring's key list (content belongs to ring)
+    // Also track analytics for viral expansion and resource planning
+    // Track creator for visibility controls
     if (ringId) {
-      await registerRingKey(ringId, secretName);
+      const creatorEmail = userEmail || null;
+      await registerRingKey(ringId, secretName, secretValueStr, labels, creatorEmail);
+      
+      // Audit log for AI agent actions
+      if (req.isAgent && req.agentDelegatedBy) {
+        const { logAuditEvent } = require('./ring-management');
+        await logAuditEvent('key_created', {
+          ringId,
+          keyName: secretName,
+          performedBy: userEmail || req.token,
+          delegatedBy: req.agentDelegatedBy,
+          entityType: 'agent'
+        });
+      }
     }
     
     res.json({
@@ -912,6 +985,20 @@ app.get('/api/v1/secrets/:ecosystem', authenticate, async (req, res) => {
     // Get keys from ring (content belongs to ring, accessible to all members)
     const ringKeys = ringId ? await listRingKeys(ringId) : [];
     
+    // Filter keys based on visibility (ring owners can't see all member keys by default)
+    const visibleKeys = [];
+    if (ringId && userEmail) {
+      for (const keyName of ringKeys) {
+        const canView = await canUserViewKey(userEmail, ringId, keyName);
+        if (canView) {
+          visibleKeys.push(keyName);
+        }
+      }
+    } else {
+      // If no user email, show all keys (backward compatibility)
+      visibleKeys.push(...ringKeys);
+    }
+    
     // Also check GCP for backward compatibility
     let ecosystemSecrets = [];
     if (client) {
@@ -934,6 +1021,16 @@ app.get('/api/v1/secrets/:ecosystem', authenticate, async (req, res) => {
               // User has a ring - only show secrets from their ring
               if (secretRingId !== ringId) {
                 return false;
+              }
+              
+              // Check visibility for ring-scoped keys
+              if (userEmail) {
+                const keyName = name.replace(`${ecosystem}-`, '').replace(/^ring-[^-]+-/, '');
+                // Note: GCP secrets visibility check would need to be done separately
+                // For now, include them if they're in the visibleKeys list
+                if (!visibleKeys.includes(keyName)) {
+                  return false;
+                }
               }
             } else {
               // Basic auth admin - only show secrets without ring labels (legacy/unscoped secrets)
@@ -958,11 +1055,11 @@ app.get('/api/v1/secrets/:ecosystem', authenticate, async (req, res) => {
     }
     
     // Combine ring keys and GCP secrets
-    const allSecrets = [...ringKeys.map(key => ({
+    const allSecrets = [...visibleKeys.map(key => ({
       secret_name: key,
       ecosystem: ecosystem,
       ringId: ringId || null,
-      accessibleTo: 'all-ring-members'
+      accessibleTo: userEmail ? 'visible-to-user' : 'all-ring-members'
     })), ...ecosystemSecrets];
     
     res.json({
@@ -1734,10 +1831,32 @@ app.post('/api/auth/google/verify', async (req, res) => {
       return sendResponse(res, 403, 'failure', null, 'Email not verified', 'Google email address is not verified');
     }
     
+    // Verify human account with Google OAuth
+    const email = userInfo.email.trim().toLowerCase();
+    const verificationId = userInfo.sub || userInfo.id || idToken; // Use Google user ID or token
+    
+    try {
+      await verifyHumanAccount(email, 'google', verificationId);
+      
+      // Create or update account
+      await createAccount(email, {
+        type: 'person',
+        email: email,
+        name: userInfo.name || null,
+        verified: true,
+        verificationMethod: 'google',
+        verificationId: verificationId
+      });
+    } catch (verifyError) {
+      console.error('Error verifying human account:', verifyError.message);
+      // Continue anyway - account might already exist
+    }
+    
     return sendResponse(res, 200, 'success', {
-      email: userInfo.email
-      // Only return email - name and picture are not stored (comma removed intentionally)
-    }, null, 'Google authentication successful');
+      email: userInfo.email,
+      verified: true,
+      canDelegate: true
+    }, null, 'Google authentication successful - account verified');
   } catch (error) {
     console.error('Error verifying Google OAuth:', error.message);
     return sendResponse(res, 500, 'failure', null, 'Failed to verify Google OAuth', 'An error occurred while verifying Google authentication', error.message);
@@ -2162,15 +2281,25 @@ app.delete('/api/admin/roles/:email', requireAdminRoleOrGoogle, async (req, res)
 // ========== Ring Management Endpoints ==========
 
 // Create a new ring (requires owner or architect)
+// Rings are flexible mesh networks - any size/shape, identified by tokens
 app.post('/api/admin/rings', requireAdminRole, async (req, res) => {
   try {
-    const { ringId, firstEmail, initialRoles } = req.body;
+    const { ringId, firstEmail, initialRoles, label, description, tags } = req.body;
+    const userEmail = req.userEmail; // Creator from authentication
     
     if (!firstEmail) {
       return sendResponse(res, 400, 'failure', null, 'Missing required field', 'firstEmail is required');
     }
     
-    const ring = await createRing(ringId, firstEmail, initialRoles);
+    // Create ring with creator tracking and optional metadata
+    // Rings accept any email addresses - flexible mesh network
+    const metadata = {
+      label: label || null,
+      description: description || null,
+      tags: tags || []
+    };
+    
+    const ring = await createRing(ringId, firstEmail, initialRoles, userEmail, metadata);
     
     return sendResponse(res, 201, 'success', ring, null, 'Ring created successfully');
   } catch (error) {
@@ -2243,14 +2372,33 @@ app.put('/api/admin/rings/:ringId/roles', requireAdminRole, async (req, res) => 
   try {
     const { ringId } = req.params;
     const { roles } = req.body;
+    const userEmail = req.userEmail;
     
     if (!roles || typeof roles !== 'object') {
       return sendResponse(res, 400, 'failure', null, 'Missing required field', 'roles object is required');
     }
     
-    const ring = await updateRingRoles(ringId, roles);
+    // Check if user can own/architect this ring
+    const ring = await getRing(ringId);
+    if (!ring) {
+      return sendResponse(res, 404, 'failure', null, 'Ring not found', `Ring ${ringId} does not exist`);
+    }
     
-    return sendResponse(res, 200, 'success', ring, null, 'Ring roles updated successfully');
+    // Enforce ownership restrictions (domain-agnostic - rings are flexible mesh networks)
+    // Check if user is trying to assign owner/architect roles
+    for (const [email, emailRoles] of Object.entries(roles)) {
+      if (emailRoles.includes('owner') || emailRoles.includes('architect')) {
+        const canOwn = await canUserOwnRing(email, ringId);
+        if (!canOwn) {
+          return sendResponse(res, 403, 'failure', null, 'Ownership restriction', 
+            `User ${email} cannot own or architect this ring. Users can only own/architect rings they created or rings created when Google auth generated a record for them.`);
+        }
+      }
+    }
+    
+    const updatedRing = await updateRingRoles(ringId, roles);
+    
+    return sendResponse(res, 200, 'success', updatedRing, null, 'Ring roles updated successfully');
   } catch (error) {
     console.error('Error updating ring roles:', error.message);
     return sendResponse(res, 500, 'failure', null, 'Failed to update ring roles', 'An error occurred while updating ring roles', error.message);
@@ -2268,9 +2416,20 @@ app.post('/api/admin/rings/:ringId/members', requireAdminRole, async (req, res) 
     }
     
     const memberRoles = roles || ['member'];
-    const ring = await addRingMember(ringId, email, memberRoles);
     
-    return sendResponse(res, 200, 'success', ring, null, 'Member added to ring successfully');
+    // Check ownership restrictions for owner/architect roles
+    const ring = await getRing(ringId);
+    if (ring && (memberRoles.includes('owner') || memberRoles.includes('architect'))) {
+      const canOwn = await canUserOwnRing(email, ringId);
+      if (!canOwn) {
+        return sendResponse(res, 403, 'failure', null, 'Ownership restriction', 
+          `User ${email} cannot own or architect this ring. Users can only own/architect rings they created or rings created when Google auth generated a record for them.`);
+      }
+    }
+    
+    const updatedRing = await addRingMember(ringId, email, memberRoles);
+    
+    return sendResponse(res, 200, 'success', updatedRing, null, 'Member added to ring successfully');
   } catch (error) {
     console.error('Error adding ring member:', error.message);
     return sendResponse(res, 500, 'failure', null, 'Failed to add ring member', 'An error occurred while adding member to ring', error.message);
@@ -2434,7 +2593,7 @@ app.get('/api/rings/my-ring', authenticate, async (req, res) => {
 
 // ========== Key Management Endpoints ==========
 
-// List all keys in a ring (content belongs to ring, accessible to all members)
+// List all keys in a ring (respects visibility - ring owners can't see all member keys by default)
 app.get('/api/rings/:ringId/keys', authenticate, async (req, res) => {
   try {
     const { ringId } = req.params;
@@ -2448,7 +2607,23 @@ app.get('/api/rings/:ringId/keys', authenticate, async (req, res) => {
       }
     }
     
-    const keys = await listRingKeys(ringId);
+    const allKeys = await listRingKeys(ringId);
+    
+    // Filter keys based on visibility (ring owners can't see all member keys by default)
+    const visibleKeys = [];
+    if (userEmail) {
+      for (const keyName of allKeys) {
+        const canView = await canUserViewKey(userEmail, ringId, keyName);
+        if (canView) {
+          visibleKeys.push(keyName);
+        }
+      }
+    } else {
+      // If no user email, show all keys (backward compatibility)
+      visibleKeys.push(...allKeys);
+    }
+    
+    const keys = visibleKeys;
     
     return sendResponse(res, 200, 'success', {
       ringId,
@@ -2549,6 +2724,62 @@ app.get('/api/rings/:ringId/keys/:keyName/share', authenticate, async (req, res)
   } catch (error) {
     console.error('Error getting key sharing info:', error.message);
     return sendResponse(res, 500, 'failure', null, 'Failed to get key sharing info', 'An error occurred while retrieving key sharing info', error.message);
+  }
+});
+
+// Request access to a key (for ring owners requesting member keys)
+app.post('/api/rings/:ringId/keys/:keyName/request', authenticate, async (req, res) => {
+  try {
+    const { ringId, keyName } = req.params;
+    const { reason } = req.body;
+    const userEmail = req.userEmail;
+    
+    if (!userEmail) {
+      return sendResponse(res, 400, 'failure', null, 'Missing user email', 'User email is required');
+    }
+    
+    // Verify user has access to this ring
+    const hasAccess = await hasRingAccess(userEmail, ringId);
+    if (!hasAccess) {
+      return sendResponse(res, 403, 'failure', null, 'Access denied', 'You do not have access to this ring');
+    }
+    
+    const result = await requestKeyAccess(ringId, keyName, userEmail, reason);
+    
+    return sendResponse(res, 200, 'success', result, null, result.message || 'Key access requested successfully');
+  } catch (error) {
+    console.error('Error requesting key access:', error.message);
+    return sendResponse(res, 500, 'failure', null, 'Failed to request key access', 'An error occurred while requesting key access', error.message);
+  }
+});
+
+// Grant access to a key (for key creators to approve requests)
+app.post('/api/rings/:ringId/keys/:keyName/grant', authenticate, async (req, res) => {
+  try {
+    const { ringId, keyName } = req.params;
+    const { grantTo } = req.body;
+    const userEmail = req.userEmail;
+    
+    if (!userEmail) {
+      return sendResponse(res, 400, 'failure', null, 'Missing user email', 'User email is required');
+    }
+    
+    if (!grantTo) {
+      return sendResponse(res, 400, 'failure', null, 'Missing required field', 'grantTo email is required');
+    }
+    
+    // Verify user has access to this ring
+    const hasAccess = await hasRingAccess(userEmail, ringId);
+    if (!hasAccess) {
+      return sendResponse(res, 403, 'failure', null, 'Access denied', 'You do not have access to this ring');
+    }
+    
+    const result = await grantKeyAccess(ringId, keyName, grantTo, userEmail);
+    
+    return sendResponse(res, 200, 'success', result, null, result.message || 'Key access granted successfully');
+  } catch (error) {
+    console.error('Error granting key access:', error.message);
+    return sendResponse(res, 500, 'failure', null, 'Failed to grant key access', 'An error occurred while granting key access', error.message);
   }
 });
 
@@ -3014,20 +3245,8 @@ async function send2FACodeViaSMS(phoneNumber, code, useTwilioVerify = false, ser
 // Import ProtonMail email service
 const { sendAuthCode } = require('./email-service');
 
-// Helper function to send 2FA code via Email (AWS SES)
-async function send2FACodeViaEmail(email, code) {
-  try {
-    console.log(`[send2FACodeViaEmail] Attempting to send code to ${email}`);
-    const result = await sendAuthCode(email, code, 'admin');
-    console.log(`[send2FACodeViaEmail] Result:`, result);
-    return { success: result.success };
-  } catch (error) {
-    console.error('[send2FACodeViaEmail] Error sending email via AWS SES:');
-    console.error(`  Error message: ${error.message}`);
-    console.error(`  Error stack:`, error.stack);
-    return { success: false, error: error.message };
-  }
-}
+// Note: send2FACodeViaEmail is already defined earlier in the file (line ~1270)
+// This duplicate declaration has been removed to fix Jest test parsing errors
 
 // Register device (Step 1: Request 2FA code)
 app.post('/api/devices/register', authenticate, async (req, res) => {

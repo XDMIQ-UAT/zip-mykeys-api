@@ -75,7 +75,7 @@ test.describe('Role Management Page', () => {
             email: 'test@example.com',
             name: 'Test User',
             picture: 'https://example.com/pic.jpg',
-            roles: ['owner', 'architect', 'member'],
+            roles: ['admin'], // Simplified: admin/member instead of owner/architect/member
             hasAdminAccess: true
           }
         })
@@ -121,7 +121,7 @@ test.describe('Role Management Page', () => {
             email: 'test@example.com',
             name: 'Test User',
             picture: 'https://example.com/pic.jpg',
-            roles: ['owner', 'architect', 'member'],
+            roles: ['admin'], // Simplified: admin/member instead of owner/architect/member
             hasAdminAccess: true
           }
         })
@@ -142,9 +142,8 @@ test.describe('Role Management Page', () => {
     const emailInput = page.locator('#userEmail');
     await expect(emailInput).toBeVisible();
     
-    // Check that role checkboxes exist
-    await expect(page.locator('#roleOwner')).toBeVisible();
-    await expect(page.locator('#roleArchitect')).toBeVisible();
+    // Check that role checkboxes exist (simplified: admin/member)
+    await expect(page.locator('#roleAdmin')).toBeVisible();
     await expect(page.locator('#roleMember')).toBeVisible();
   });
 
@@ -160,7 +159,7 @@ test.describe('Role Management Page', () => {
             email: 'test@example.com',
             name: 'Test User',
             picture: 'https://example.com/pic.jpg',
-            roles: ['owner', 'architect', 'member'],
+            roles: ['admin'], // Simplified: admin/member instead of owner/architect/member
             hasAdminAccess: true
           }
         })
@@ -177,7 +176,7 @@ test.describe('Role Management Page', () => {
             status: 'success',
             data: {
               users: [
-                { email: 'test@example.com', roles: ['owner', 'architect', 'member'] },
+                { email: 'test@example.com', roles: ['admin'] },
                 { email: 'user2@example.com', roles: ['member'] }
               ]
             }

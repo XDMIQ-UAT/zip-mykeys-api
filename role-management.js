@@ -1,9 +1,9 @@
 /**
  * Role Management for MyKeys.zip
  * 
- * Manages user roles (owner, architect, member) by email
- * Now supports ring-scoped roles (multi-tenant)
- * Falls back to legacy global roles for backward compatibility
+ * Simplified: admin/member roles
+ * Supports people/agents/bots
+ * Ring-scoped roles with HIPAA-compliant separation
  */
 
 const { getKV } = require('./kv-utils');
@@ -11,115 +11,112 @@ const {
   getRingForEmail, 
   getRingMemberRoles, 
   initializeDefaultRing,
-  FIRST_EMAIL 
+  FIRST_EMAIL,
+  ENTITY_TYPES
 } = require('./ring-management');
 
 const ROLES_KEY = 'user-roles';
 const DEFAULT_ROLE = 'member';
 
 /**
- * Get roles for an email (ring-scoped if ring exists, otherwise legacy)
- * @param {string} email - User email address
+ * Get role for an identifier (ring-scoped if ring exists, otherwise legacy)
+ * @param {string} identifier - User identifier (email or token)
  * @param {string} ringId - Optional ring ID (if not provided, auto-detects)
- * @returns {Promise<string[]>} - Array of roles (e.g., ['member', 'architect', 'owner'])
+ * @returns {Promise<string>} - Role ('admin' or 'member')
  */
-async function getUserRoles(email, ringId = null) {
-  if (!email) return [DEFAULT_ROLE];
+async function getUserRoles(identifier, ringId = null) {
+  if (!identifier) return DEFAULT_ROLE;
   
-  email = email.trim().toLowerCase();
+  identifier = identifier.trim().toLowerCase();
   
   try {
     // Try ring-based roles first
-    if (!ringId) {
-      ringId = await getRingForEmail(email);
+    if (!ringId && identifier.includes('@')) {
+      ringId = await getRingForEmail(identifier);
     }
     
     if (ringId) {
-      const ringRoles = await getRingMemberRoles(ringId, email);
-      if (ringRoles.length > 0) {
-        return ringRoles;
+      const memberData = await getRingMemberRoles(ringId, identifier);
+      if (memberData && memberData.role) {
+        return memberData.role;
       }
     }
     
     // Fallback to legacy global roles
     const kv = getKV();
     if (!kv) {
-      // Fallback: check if it's the first email
-      if (email === FIRST_EMAIL) {
-        return ['owner', 'architect', 'member'];
-      }
-      return [DEFAULT_ROLE];
+      return identifier === FIRST_EMAIL ? 'admin' : DEFAULT_ROLE;
     }
     
     const rolesData = await kv.get(ROLES_KEY);
     if (!rolesData) {
-      // Initialize with first email
       const initialRoles = {
-        [FIRST_EMAIL]: ['owner', 'architect', 'member']
+        [FIRST_EMAIL]: 'admin'
       };
       await kv.set(ROLES_KEY, JSON.stringify(initialRoles));
-      return email === FIRST_EMAIL ? ['owner', 'architect', 'member'] : [DEFAULT_ROLE];
+      return identifier === FIRST_EMAIL ? 'admin' : DEFAULT_ROLE;
     }
     
-    // Handle both string and object responses from KV
     const roles = typeof rolesData === 'string' ? JSON.parse(rolesData) : rolesData;
-    return roles[email] || [DEFAULT_ROLE];
+    return roles[identifier] || DEFAULT_ROLE;
   } catch (error) {
     console.error('[role-management] Error getting user roles:', error.message);
-    // Fallback: check if it's the first email
-    if (email === FIRST_EMAIL) {
-      return ['owner', 'architect', 'member'];
-    }
-    return [DEFAULT_ROLE];
+    return identifier === FIRST_EMAIL ? 'admin' : DEFAULT_ROLE;
   }
 }
 
 /**
- * Set roles for an email (ring-scoped if ring exists, otherwise legacy)
- * @param {string} email - User email address
- * @param {string[]} roles - Array of roles to assign
- * @param {string} ringId - Optional ring ID (if not provided, auto-detects or uses default)
+ * Set role for an identifier (ring-scoped if ring exists, otherwise legacy)
+ * @param {string} identifier - User identifier (email or token)
+ * @param {string} role - Role to assign ('admin' or 'member')
+ * @param {string} ringId - Optional ring ID (if not provided, auto-detects)
  * @returns {Promise<boolean>} - Success status
  */
-async function setUserRoles(email, roles, ringId = null) {
-  if (!email) throw new Error('Email is required');
+async function setUserRoles(identifier, role, ringId = null) {
+  if (!identifier) throw new Error('Identifier is required');
   
-  email = email.trim().toLowerCase();
+  identifier = identifier.trim().toLowerCase();
   
-  // Validate roles
-  const validRoles = ['owner', 'architect', 'member'];
-  const invalidRoles = roles.filter(r => !validRoles.includes(r));
-  if (invalidRoles.length > 0) {
-    throw new Error(`Invalid roles: ${invalidRoles.join(', ')}. Valid roles are: ${validRoles.join(', ')}`);
+  // Validate role
+  const validRoles = ['admin', 'member'];
+  if (!validRoles.includes(role)) {
+    throw new Error(`Invalid role: ${role}. Valid roles are: ${validRoles.join(', ')}`);
   }
   
   try {
     // Try ring-based roles first
-    if (!ringId) {
-      ringId = await getRingForEmail(email);
+    if (!ringId && identifier.includes('@')) {
+      ringId = await getRingForEmail(identifier);
     }
     
     if (ringId) {
-      // Update ring-scoped roles
+      // Update ring-scoped role
       const { updateRingRoles, getRing } = require('./ring-management');
       const ring = await getRing(ringId);
       if (!ring) {
         throw new Error(`Ring ${ringId} not found`);
       }
       
-      // Get current roles and update
-      const currentRoles = {};
-      for (const [memberEmail, memberData] of Object.entries(ring.members)) {
-        currentRoles[memberEmail] = memberData.roles;
+      // Get current members and update
+      const currentMembers = {};
+      for (const [id, memberData] of Object.entries(ring.members)) {
+        currentMembers[id] = {
+          role: memberData.role || 'member',
+          entityType: memberData.entityType || ENTITY_TYPES.PERSON
+        };
       }
       
-      // Ensure at least member role
-      if (!roles.includes('member')) {
-        roles.push('member');
+      // Update role for this identifier
+      if (currentMembers[identifier]) {
+        currentMembers[identifier].role = role;
+      } else {
+        currentMembers[identifier] = {
+          role: role,
+          entityType: ENTITY_TYPES.PERSON
+        };
       }
       
-      currentRoles[email] = roles;
-      await updateRingRoles(ringId, currentRoles);
+      await updateRingRoles(ringId, currentMembers);
       return true;
     }
     
@@ -129,20 +126,10 @@ async function setUserRoles(email, roles, ringId = null) {
       throw new Error('KV storage not available');
     }
     
-    // Get existing roles
     const rolesData = await kv.get(ROLES_KEY);
-    // Handle both string and object responses from KV
     const allRoles = rolesData ? (typeof rolesData === 'string' ? JSON.parse(rolesData) : rolesData) : {};
     
-    // Update roles for this email
-    allRoles[email] = roles;
-    
-    // Ensure at least member role
-    if (!allRoles[email].includes('member')) {
-      allRoles[email].push('member');
-    }
-    
-    // Save back to KV
+    allRoles[identifier] = role;
     await kv.set(ROLES_KEY, JSON.stringify(allRoles));
     
     return true;
@@ -213,26 +200,24 @@ async function removeUserRoles(email, ringId = null) {
 
 /**
  * Check if user has a specific role
- * @param {string} email - User email address
- * @param {string} role - Role to check (owner, architect, member)
+ * @param {string} identifier - User identifier (email or token)
+ * @param {string} role - Role to check ('admin' or 'member')
  * @param {string} ringId - Optional ring ID
  * @returns {Promise<boolean>} - True if user has the role
  */
-async function hasRole(email, role, ringId = null) {
-  const roles = await getUserRoles(email, ringId);
-  return roles.includes(role);
+async function hasRole(identifier, role, ringId = null) {
+  const userRole = await getUserRoles(identifier, ringId);
+  return userRole === role;
 }
 
 /**
- * Check if user has any of the specified roles
- * @param {string} email - User email address
- * @param {string[]} roles - Array of roles to check
+ * Check if user has admin role
+ * @param {string} identifier - User identifier (email or token)
  * @param {string} ringId - Optional ring ID
- * @returns {Promise<boolean>} - True if user has any of the roles
+ * @returns {Promise<boolean>} - True if user is admin
  */
-async function hasAnyRole(email, roles, ringId = null) {
-  const userRoles = await getUserRoles(email, ringId);
-  return roles.some(role => userRoles.includes(role));
+async function isAdmin(identifier, ringId = null) {
+  return hasRole(identifier, 'admin', ringId);
 }
 
 module.exports = {

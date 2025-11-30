@@ -239,3 +239,4 @@ Potential improvements:
 
 The update process is designed to be **easy but not automatic**, giving users control while making updates simple.
 
+

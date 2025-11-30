@@ -312,3 +312,4 @@ The privacy vault system integrates seamlessly with the ring-based content model
 - `ring-management.js` - Ring management functions
 - `docs/KEY_MANAGEMENT_MODEL.md` - Key management model documentation
 
+

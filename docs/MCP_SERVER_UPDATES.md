@@ -195,3 +195,4 @@ MCP tools are automatically available in Cursor and Warp when the MCP server is 
 - `docs/CLI_WEB_UI_COVERAGE.md` - CLI and Web UI coverage
 - `docs/KEY_MANAGEMENT_MODEL.md` - Key management model
 
+

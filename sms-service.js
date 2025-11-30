@@ -23,8 +23,9 @@ function getKV() {
       });
     } else {
       try {
-        const { kv: defaultKv } = require('@vercel/kv');
-        kvClient = defaultKv;
+        // @vercel/kv exports kv as a property, not a named export
+        const kvModule = require('@vercel/kv');
+        kvClient = kvModule.kv;
       } catch (e) {
         console.error('[sms-service] KV client not available');
       }

@@ -93,3 +93,4 @@ curl -o ~/.mykeys/mcp-server.js https://mykeys.zip/mcp-server.js
 
 The new tools will appear automatically after updating and restarting!
 
+

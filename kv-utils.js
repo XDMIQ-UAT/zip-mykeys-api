@@ -20,9 +20,11 @@ function getKV() {
       });
     } else {
       // Try default @vercel/kv (requires KV_REST_API_URL/TOKEN)
+      // @vercel/kv exports kv as a property, not a named export
       try {
-        const { kv: defaultKv } = require('@vercel/kv');
-        kv = defaultKv;
+        const kvModule = require('@vercel/kv');
+        // kv is a property of the module, access it as kvModule.kv
+        kv = kvModule.kv;
       } catch (e) {
         console.error('[kv-utils] KV client not available - missing environment variables');
       }
