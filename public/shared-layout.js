@@ -570,10 +570,27 @@
     }
     
     // Initialize when DOM is ready
+    console.log('shared-layout.js loaded, readyState:', document.readyState);
     if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', initSharedLayout);
+        console.log('Waiting for DOMContentLoaded');
+        document.addEventListener('DOMContentLoaded', () => {
+            console.log('DOMContentLoaded fired');
+            initSharedLayout();
+        });
     } else {
+        console.log('DOM already ready, calling initSharedLayout immediately');
         initSharedLayout();
     }
+    
+    // Also try after a delay as fallback
+    setTimeout(() => {
+        console.log('Fallback timeout - checking if layout initialized');
+        const header = document.querySelector('.header');
+        const footer = document.querySelector('.footer');
+        if (!header || !footer) {
+            console.warn('Header or footer not found after timeout, re-initializing');
+            initSharedLayout();
+        }
+    }, 1000);
 })();
 
