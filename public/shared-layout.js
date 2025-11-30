@@ -465,25 +465,36 @@
             const ensureFullWidth = (element, name) => {
                 if (!element) return;
                 
-                // Method 1: Set via cssText
-                element.style.cssText += 'width: 100% !important; max-width: 100% !important; margin-left: 0 !important; margin-right: 0 !important; padding-left: 0 !important; padding-right: 0 !important;';
-                
-                // Method 2: Calculate and set based on viewport
+                // Method 1: Use calc() trick to break out of containers
                 const viewportWidth = window.innerWidth || document.documentElement.clientWidth;
+                element.style.marginLeft = 'calc(50% - 50vw)';
+                element.style.marginRight = 'calc(50% - 50vw)';
+                element.style.width = '100vw';
+                element.style.maxWidth = '100vw';
+                
+                // Method 2: Also set as pixel value as fallback
                 element.style.width = viewportWidth + 'px';
                 
-                // Method 3: Use negative margins if inside a container
+                // Method 3: Use negative margins if still constrained
                 const rect = element.getBoundingClientRect();
                 const bodyRect = document.body.getBoundingClientRect();
-                if (rect.left !== 0 || rect.right !== bodyRect.width) {
+                if (rect.left !== 0 || Math.abs(rect.right - bodyRect.width) > 1) {
                     const leftOffset = -rect.left;
                     const rightOffset = bodyRect.width - rect.right;
-                    element.style.marginLeft = leftOffset + 'px';
-                    element.style.marginRight = rightOffset + 'px';
-                    element.style.width = `calc(100% + ${-leftOffset + rightOffset}px)`;
+                    if (leftOffset !== 0 || rightOffset !== 0) {
+                        element.style.marginLeft = leftOffset + 'px';
+                        element.style.marginRight = rightOffset + 'px';
+                        element.style.width = (viewportWidth + leftOffset + rightOffset) + 'px';
+                    }
                 }
                 
-                console.log(`${name} width:`, element.offsetWidth, 'viewport:', viewportWidth, 'rect:', rect);
+                // Force other properties
+                element.style.position = 'relative';
+                element.style.boxSizing = 'border-box';
+                element.style.paddingLeft = '0';
+                element.style.paddingRight = '0';
+                
+                console.log(`${name} width:`, element.offsetWidth, 'viewport:', viewportWidth, 'rect.left:`, rect.left, 'rect.right:`, rect.right, 'body.width:`, bodyRect.width);
             };
             
             // Apply immediately and after layout
