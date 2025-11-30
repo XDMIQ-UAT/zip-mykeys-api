@@ -240,44 +240,73 @@
         const footerPlaceholder = document.getElementById('shared-footer');
         const mainContent = document.querySelector('.main-content') || document.querySelector('main') || document.body;
         
-        // Insert header
+        // Insert header FIRST, before any wrapping
+        let insertedHeader = null;
         if (headerPlaceholder) {
+            // Check if header placeholder is inside main-content or container
+            const headerParent = headerPlaceholder.parentElement;
+            if (headerParent && (headerParent.classList.contains('main-content') || headerParent.classList.contains('container'))) {
+                // Move placeholder outside first
+                headerParent.removeChild(headerPlaceholder);
+                document.body.insertBefore(headerPlaceholder, document.body.firstChild);
+            }
             headerPlaceholder.outerHTML = headerHTML;
+            insertedHeader = document.querySelector('.header');
         } else {
             // Insert at beginning of body
             const headerDiv = document.createElement('div');
             headerDiv.innerHTML = headerHTML;
-            document.body.insertBefore(headerDiv.firstElementChild, document.body.firstChild);
+            insertedHeader = headerDiv.firstElementChild;
+            document.body.insertBefore(insertedHeader, document.body.firstChild);
         }
         
-        // Wrap main content if needed
-        const existingMain = document.querySelector('main');
-        const insertedHeader = document.querySelector('.header');
+        // Ensure header is at the very top of body
+        if (insertedHeader && insertedHeader.parentElement !== document.body) {
+            const headerParent = insertedHeader.parentElement;
+            headerParent.removeChild(insertedHeader);
+            document.body.insertBefore(insertedHeader, document.body.firstChild);
+        }
         
-        if (!existingMain && mainContent === document.body) {
-            // Wrap body content in main-content div, but exclude header and footer
-            const wrapper = document.createElement('div');
-            wrapper.className = 'main-content';
-            while (document.body.firstChild && 
-                   document.body.firstChild.tagName !== 'SCRIPT' && 
-                   document.body.firstChild.id !== 'shared-footer' &&
-                   document.body.firstChild.classList && 
-                   !document.body.firstChild.classList.contains('header')) {
-                wrapper.appendChild(document.body.firstChild);
+        // Wrap main content if needed (but skip header and footer)
+        const existingMain = document.querySelector('main');
+        const mainContentDiv = document.querySelector('.main-content');
+        
+        if (!existingMain && !mainContentDiv && mainContent === document.body) {
+            // Find all children except header and footer placeholders
+            const childrenToWrap = [];
+            let child = document.body.firstChild;
+            while (child) {
+                const nextSibling = child.nextSibling;
+                if (child !== insertedHeader && 
+                    child.tagName !== 'SCRIPT' && 
+                    child.id !== 'shared-footer' &&
+                    (!child.classList || !child.classList.contains('header')) &&
+                    (!child.classList || !child.classList.contains('footer'))) {
+                    childrenToWrap.push(child);
+                }
+                child = nextSibling;
             }
-            // Insert wrapper after header if header exists, otherwise at beginning
-            if (insertedHeader && insertedHeader.nextSibling) {
-                document.body.insertBefore(wrapper, insertedHeader.nextSibling);
-            } else {
-                document.body.insertBefore(wrapper, document.body.firstChild);
+            
+            // Create wrapper and move children
+            if (childrenToWrap.length > 0) {
+                const wrapper = document.createElement('div');
+                wrapper.className = 'main-content';
+                childrenToWrap.forEach(child => wrapper.appendChild(child));
+                
+                // Insert wrapper after header
+                if (insertedHeader && insertedHeader.nextSibling) {
+                    document.body.insertBefore(wrapper, insertedHeader.nextSibling);
+                } else {
+                    document.body.appendChild(wrapper);
+                }
             }
-        } else if (existingMain) {
+        } else if (existingMain && !existingMain.classList.contains('main-content')) {
             existingMain.classList.add('main-content');
         }
         
-        // Ensure header is outside main-content and spans full width
+        // Final check: Ensure header is outside main-content
         if (insertedHeader) {
-            let headerParent = insertedHeader.parentElement;
+            const headerParent = insertedHeader.parentElement;
             if (headerParent && (headerParent.classList.contains('main-content') || headerParent.classList.contains('container'))) {
                 headerParent.removeChild(insertedHeader);
                 document.body.insertBefore(insertedHeader, document.body.firstChild);
@@ -333,15 +362,39 @@
             // Ensure footer content is visible
             const footerContent = insertedFooter.querySelector('.footer-content');
             const footerBottom = insertedFooter.querySelector('.footer-bottom');
+            const footerContainer = insertedFooter.querySelector('.container');
+            
             if (footerContent) {
                 footerContent.style.display = 'grid';
                 footerContent.style.visibility = 'visible';
                 footerContent.style.opacity = '1';
+                footerContent.style.color = 'white';
             }
             if (footerBottom) {
                 footerBottom.style.visibility = 'visible';
                 footerBottom.style.opacity = '1';
+                footerBottom.style.color = 'rgba(255, 255, 255, 0.6)';
             }
+            if (footerContainer) {
+                footerContainer.style.display = 'block';
+                footerContainer.style.visibility = 'visible';
+                footerContainer.style.opacity = '1';
+            }
+            
+            // Force all footer text to be visible
+            const footerSections = insertedFooter.querySelectorAll('.footer-section');
+            footerSections.forEach(section => {
+                section.style.visibility = 'visible';
+                section.style.opacity = '1';
+                section.style.display = 'block';
+            });
+            
+            const footerTexts = insertedFooter.querySelectorAll('h3, h4, p, a');
+            footerTexts.forEach(text => {
+                text.style.visibility = 'visible';
+                text.style.opacity = '1';
+                text.style.display = 'block';
+            });
         }
     }
     
