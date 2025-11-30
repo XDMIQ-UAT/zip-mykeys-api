@@ -93,15 +93,21 @@ const {
 // Store temporary codes in memory (expire after 10 minutes)
 const architectCodes = new Map(); // code -> { expiresAt, partialMatch }
 
-// Clean up expired codes every 5 minutes
-setInterval(() => {
+// Clean up expired codes (called on-demand, not via setInterval for serverless compatibility)
+function cleanupExpiredCodes() {
   const now = Date.now();
   for (const [code, data] of architectCodes.entries()) {
     if (data.expiresAt < now) {
       architectCodes.delete(code);
     }
   }
-}, 5 * 60 * 1000);
+}
+
+// Clean up expired codes periodically only in non-serverless environments
+// In Vercel serverless, cleanup happens on-demand
+if (process.env.VERCEL !== '1' && typeof setInterval !== 'undefined') {
+  setInterval(cleanupExpiredCodes, 5 * 60 * 1000);
+}
 
 const app = express();
 
@@ -1932,6 +1938,7 @@ app.post('/api/mcp/token/generate', async (req, res) => {
     
     // Check for architect code first
     if (architectCode) {
+      cleanupExpiredCodes(); // Clean up expired codes before checking
       const codeData = architectCodes.get(architectCode);
       if (!codeData) {
         return res.status(401).json({
@@ -4082,23 +4089,30 @@ app.use((error, req, res, next) => {
   });
 });
 
-// Start server
-app.listen(FINAL_PORT, () => {
-  console.log(`🚀 MyKeys API Service running on port ${FINAL_PORT}`);
+// Start server only in non-serverless environments (Vercel handles this automatically)
+// Vercel serverless functions should NOT call app.listen()
+if (process.env.VERCEL !== '1') {
+  app.listen(FINAL_PORT, () => {
+    console.log(`🚀 MyKeys API Service running on port ${FINAL_PORT}`);
+    console.log(`📦 Project: ${PROJECT_ID}`);
+    console.log(`🔐 Authentication: Basic Auth + Bearer Token`);
+    console.log(`📚 Available endpoints:`);
+    console.log(`   GET  /health`);
+    console.log(`   GET  /api/health`);
+    console.log(`   GET  /api/v1/health`);
+    console.log(`   GET  /api/secrets`);
+    console.log(`   GET  /api/secrets/:name`);
+    console.log(`   POST /api/secrets`);
+    console.log(`   GET  /api/v1/secrets/:ecosystem/:secretName`);
+    console.log(`   POST /api/v1/secrets/:ecosystem`);
+    console.log(`   GET  /api/v1/secrets/:ecosystem`);
+    console.log(`   POST /api/tld/:domain`);
+    console.log(`   GET  /api/tld/:domain`);
+  });
+} else {
+  // In Vercel, just log that the app is ready
+  console.log(`🚀 MyKeys API Service ready for Vercel serverless`);
   console.log(`📦 Project: ${PROJECT_ID}`);
-  console.log(`🔐 Authentication: Basic Auth + Bearer Token`);
-  console.log(`📚 Available endpoints:`);
-  console.log(`   GET  /health`);
-  console.log(`   GET  /api/health`);
-  console.log(`   GET  /api/v1/health`);
-  console.log(`   GET  /api/secrets`);
-  console.log(`   GET  /api/secrets/:name`);
-  console.log(`   POST /api/secrets`);
-  console.log(`   GET  /api/v1/secrets/:ecosystem/:secretName`);
-  console.log(`   POST /api/v1/secrets/:ecosystem`);
-  console.log(`   GET  /api/v1/secrets/:ecosystem`);
-  console.log(`   POST /api/tld/:domain`);
-  console.log(`   GET  /api/tld/:domain`);
-});
+}
 
 module.exports = app;
