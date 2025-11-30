@@ -21,16 +21,24 @@ let AWS_REGION = 'us-east-1';
 function getSESClient() {
   if (sesClient) return sesClient;
   
+  // Get credentials from environment variables (Vercel)
+  const accessKeyId = process.env.AWS_ACCESS_KEY_ID;
+  const secretAccessKey = process.env.AWS_SECRET_ACCESS_KEY;
+  const region = process.env.AWS_REGION || 'us-east-1';
+  
+  if (!accessKeyId || !secretAccessKey) {
+    const missingVars = [];
+    if (!accessKeyId) missingVars.push('AWS_ACCESS_KEY_ID');
+    if (!secretAccessKey) missingVars.push('AWS_SECRET_ACCESS_KEY');
+    
+    const errorMsg = `AWS SES credentials missing: ${missingVars.join(', ')}. ` +
+      `Please set these environment variables in Vercel: ` +
+      `https://vercel.com/xdmiq/zip-myl-mykeys-api/settings/environment-variables`;
+    console.error('[email-service]', errorMsg);
+    throw new Error(errorMsg);
+  }
+  
   try {
-    // Get credentials from environment variables (Vercel)
-    const accessKeyId = process.env.AWS_ACCESS_KEY_ID;
-    const secretAccessKey = process.env.AWS_SECRET_ACCESS_KEY;
-    const region = process.env.AWS_REGION || 'us-east-1';
-    
-    if (!accessKeyId || !secretAccessKey) {
-      throw new Error('AWS credentials not found in environment variables. Set AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY in Vercel.');
-    }
-    
     AWS_REGION = region;
     // Check SES_SENDER_EMAIL (already set in Vercel) or fallback to SES_FROM_EMAIL
     DEFAULT_SENDER = process.env.SES_SENDER_EMAIL || process.env.SES_FROM_EMAIL || 'hello@cosmiciq.org';
@@ -44,10 +52,11 @@ function getSESClient() {
     });
     
     console.log('[email-service] SES client initialized with AWS SDK');
+    console.log(`[email-service] Region: ${AWS_REGION}, Sender: ${DEFAULT_SENDER}`);
     return sesClient;
   } catch (error) {
     console.error('[email-service] Failed to initialize SES client:', error.message);
-    throw error;
+    throw new Error(`Failed to initialize AWS SES client: ${error.message}`);
   }
 }
 
@@ -60,6 +69,9 @@ function getSESClient() {
  * @returns {Promise<Object>} - Send result with messageId
  */
 async function sendAuthCode(toEmail, code, username = 'user') {
+  // Get SES client (will throw if credentials missing)
+  const client = getSESClient();
+  
   // Improved HTML email with better spam score - removed trigger words
   const htmlBody = `
 <!DOCTYPE html>
@@ -235,6 +247,19 @@ This is an automated message. Please do not reply.
     console.error('  Error message:', error.message);
     console.error('  Error code:', error.Code || error.name || 'N/A');
     console.error('  Error details:', error.$metadata || 'N/A');
+    console.error('  Full error:', JSON.stringify(error, null, 2));
+    
+    // Check if AWS credentials are actually available
+    const hasAccessKey = !!process.env.AWS_ACCESS_KEY_ID;
+    const hasSecretKey = !!process.env.AWS_SECRET_ACCESS_KEY;
+    console.error('  AWS_ACCESS_KEY_ID present:', hasAccessKey);
+    console.error('  AWS_SECRET_ACCESS_KEY present:', hasSecretKey);
+    
+    // If error mentions PLAIN, it might be trying SMTP instead of SDK
+    if (error.message.includes('PLAIN') || error.message.includes('SMTP')) {
+      throw new Error(`Email delivery failed: AWS SES SDK not initialized correctly. Check AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY environment variables. Original error: ${error.message}`);
+    }
+    
     throw new Error(`Email delivery failed: ${error.message}`);
   }
 }

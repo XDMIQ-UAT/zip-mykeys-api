@@ -37,12 +37,13 @@ const TOKEN_SECRET_PREFIX = 'mcp-token-';
  * @param {string} clientId - Client identifier (e.g., 'cursor-agent', 'warp-agent')
  * @param {string} clientType - Client type ('cursor', 'warp', 'other')
  * @param {number} expiresInDays - Token expiration in days (default: 90)
+ * @param {string} email - User email address (optional)
  * @returns {Promise<{token: string, expiresAt: Date}>}
  */
 // In-memory fallback storage for tokens (when GCP is not available)
 const inMemoryTokens = new Map(); // tokenId -> tokenData
 
-async function generateMCPToken(clientId, clientType, expiresInDays = 90) {
+async function generateMCPToken(clientId, clientType, expiresInDays = 90, email = null) {
   // Generate secure random token
   const token = crypto.randomBytes(32).toString('hex');
   const tokenId = `${clientId}-${Date.now()}`;
@@ -54,6 +55,7 @@ async function generateMCPToken(clientId, clientType, expiresInDays = 90) {
     token: token,
     clientId: clientId,
     clientType: clientType,
+    email: email ? email.trim().toLowerCase() : null,
     createdAt: new Date().toISOString(),
     expiresAt: expiresAt.toISOString(),
     permissions: ['read', 'write'], // MCP tokens can read and write
@@ -148,6 +150,7 @@ async function validateMCPToken(token) {
         valid: true,
         clientId: tokenData.clientId,
         clientType: tokenData.clientType,
+        email: tokenData.email || null,
         expiresAt: expiresAt,
         permissions: tokenData.permissions || ['read', 'write'],
       };
@@ -188,6 +191,7 @@ async function validateMCPToken(token) {
               valid: true,
               clientId: tokenData.clientId,
               clientType: tokenData.clientType,
+              email: tokenData.email || null,
               expiresAt: expiresAt,
               permissions: tokenData.permissions || ['read', 'write'],
             };
