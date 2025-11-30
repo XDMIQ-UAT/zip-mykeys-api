@@ -145,40 +145,55 @@
         }
         
         .footer-content {
-            display: grid;
+            display: grid !important;
             grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
             gap: 40px;
             margin-bottom: 40px;
+            visibility: visible !important;
+            opacity: 1 !important;
+        }
+        
+        .footer-section {
+            visibility: visible !important;
+            opacity: 1 !important;
         }
         
         .footer-section h3,
         .footer-section h4 {
             margin-bottom: 16px;
-            color: white;
+            color: white !important;
+            visibility: visible !important;
+            opacity: 1 !important;
         }
         
         .footer-section p {
-            color: rgba(255, 255, 255, 0.8);
+            color: rgba(255, 255, 255, 0.8) !important;
             line-height: 1.6;
+            visibility: visible !important;
+            opacity: 1 !important;
         }
         
         .footer-section a {
             display: block;
-            color: rgba(255, 255, 255, 0.7);
+            color: rgba(255, 255, 255, 0.7) !important;
             margin-bottom: 8px;
             text-decoration: none;
             transition: color 0.2s;
+            visibility: visible !important;
+            opacity: 1 !important;
         }
         
         .footer-section a:hover {
-            color: white;
+            color: white !important;
         }
         
         .footer-bottom {
             border-top: 1px solid rgba(255, 255, 255, 0.1);
             padding-top: 30px;
             text-align: center;
-            color: rgba(255, 255, 255, 0.6);
+            color: rgba(255, 255, 255, 0.6) !important;
+            visibility: visible !important;
+            opacity: 1 !important;
         }
         
         /* Layout wrapper */
