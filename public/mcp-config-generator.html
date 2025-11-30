@@ -31,10 +31,10 @@
         .main-content {
             flex: 1;
             display: flex;
-            align-items: center;
+            align-items: flex-start; /* Changed from center to flex-start */
             justify-content: center;
             padding: 20px;
-            padding-bottom: 40px; /* Extra space before footer */
+            padding-bottom: 20px; /* Reduced padding */
             min-height: 0; /* Allow flex shrinking */
             overflow-y: auto; /* Allow scrolling if content is too tall */
             margin-top: 0;
@@ -108,6 +108,8 @@
             width: 100%;
             padding: 40px;
             margin-bottom: 0; /* Ensure no margin pushing footer down */
+            min-height: auto; /* Don't force minimum height */
+            height: auto; /* Let content determine height */
         }
         
         h1 {
