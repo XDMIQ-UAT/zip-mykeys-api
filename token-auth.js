@@ -6,27 +6,45 @@
  */
 
 const crypto = require('crypto');
-const { SecretManagerServiceClient } = require('@google-cloud/secret-manager');
 
-// Initialize GCP Secret Manager client with error handling
-let client;
-let PROJECT_ID = process.env.GCP_PROJECT || 'myl-zip-www';
-
+// Conditionally require GCP Secret Manager (may not be available in serverless)
+let SecretManagerServiceClient = null;
 try {
-  // Check if we have GCP credentials
-  const hasCredentials = process.env.GOOGLE_APPLICATION_CREDENTIALS || 
-                        process.env.GCP_PROJECT || 
-                        process.env.GCP_SERVICE_ACCOUNT_KEY;
-  
-  if (hasCredentials) {
-    client = new SecretManagerServiceClient();
-  } else {
-    console.warn('GCP credentials not configured. Token generation will use in-memory storage (not persistent).');
-    client = null;
+  if (process.env.VERCEL !== '1') {
+    // Only require GCP client in non-serverless environments
+    const gcpSecretManager = require('@google-cloud/secret-manager');
+    SecretManagerServiceClient = gcpSecretManager.SecretManagerServiceClient;
   }
 } catch (error) {
-  console.error('Failed to initialize GCP Secret Manager:', error.message);
-  client = null;
+  console.warn('GCP Secret Manager package not available:', error.message);
+}
+
+// Initialize GCP Secret Manager client with error handling
+let client = null;
+let PROJECT_ID = process.env.GCP_PROJECT || 'myl-zip-www';
+
+// GCP Secret Manager removed - using in-memory storage only
+// Tokens are stored in-memory and will not persist across deployments
+// In production, consider using Redis/KV for token persistence
+if (false && SecretManagerServiceClient) {
+  try {
+    // Check if we have GCP credentials
+    const hasCredentials = process.env.GOOGLE_APPLICATION_CREDENTIALS || 
+                          process.env.GCP_PROJECT || 
+                          process.env.GCP_SERVICE_ACCOUNT_KEY;
+    
+    if (hasCredentials) {
+      client = new SecretManagerServiceClient();
+    } else {
+      console.warn('GCP credentials not configured. Token generation will use in-memory storage (not persistent).');
+      client = null;
+    }
+  } catch (error) {
+    console.error('Failed to initialize GCP Secret Manager:', error.message);
+    client = null;
+  }
+} else {
+  console.log('GCP Secret Manager disabled - using in-memory token storage');
 }
 
 // Token storage in GCP Secret Manager
@@ -218,38 +236,49 @@ async function validateMCPToken(token) {
 async function revokeMCPToken(token) {
   const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
   
-  try {
-    const [secrets] = await client.listSecrets({
-      parent: `projects/${PROJECT_ID}`,
-      filter: `labels.type=mcp-token`,
-    });
-    
-    for (const secret of secrets) {
-      try {
-        const [version] = await client.accessSecretVersion({
-          name: `${secret.name}/versions/latest`,
-        });
-        
-        const tokenData = JSON.parse(version.payload.data.toString('utf8'));
-        const storedHash = crypto.createHash('sha256').update(tokenData.token).digest('hex');
-        
-        if (storedHash === tokenHash) {
-          // Delete the secret (revoke token)
-          await client.deleteSecret({
-            name: secret.name,
-          });
-          return true;
-        }
-      } catch (err) {
-        continue;
-      }
+  // Check in-memory storage first
+  for (const [tokenId, tokenData] of inMemoryTokens.entries()) {
+    const storedHash = crypto.createHash('sha256').update(tokenData.token).digest('hex');
+    if (storedHash === tokenHash) {
+      inMemoryTokens.delete(tokenId);
+      return true;
     }
-    
-    return false;
-  } catch (error) {
-    console.error('Error revoking token:', error);
-    return false;
   }
+  
+  // GCP removed - using in-memory storage only
+  if (client) {
+    try {
+      const [secrets] = await client.listSecrets({
+        parent: `projects/${PROJECT_ID}`,
+        filter: `labels.type=mcp-token`,
+      });
+      
+      for (const secret of secrets) {
+        try {
+          const [version] = await client.accessSecretVersion({
+            name: `${secret.name}/versions/latest`,
+          });
+          
+          const tokenData = JSON.parse(version.payload.data.toString('utf8'));
+          const storedHash = crypto.createHash('sha256').update(tokenData.token).digest('hex');
+          
+          if (storedHash === tokenHash) {
+            // Delete the secret (revoke token)
+            await client.deleteSecret({
+              name: secret.name,
+            });
+            return true;
+          }
+        } catch (err) {
+          continue;
+        }
+      }
+    } catch (error) {
+      console.error('Error revoking token:', error);
+    }
+  }
+  
+  return false;
 }
 
 module.exports = {
