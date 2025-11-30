@@ -471,6 +471,11 @@ app.get('/generate-token.html', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'generate-token.html'));
 });
 
+// Handle /generate-token without .html extension (redirect to .html)
+app.get('/generate-token', (req, res) => {
+  res.redirect('/generate-token.html');
+});
+
 app.get('/rebuild', (req, res) => {
   const filePath = path.join(__dirname, 'public', 'rebuild.html');
   res.sendFile(filePath, (err) => {
