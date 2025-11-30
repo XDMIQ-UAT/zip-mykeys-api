@@ -18,6 +18,8 @@ const MYKEYS_USER = process.env.MYKEYS_USER || 'admin'; // Fallback for Basic Au
 const MYKEYS_PASS = process.env.MYKEYS_PASS || ''; // Fallback for Basic Auth
 const CLIENT_ID = process.env.MCP_CLIENT_ID || 'mcp-mykeys-client';
 const SYNC_ENABLED = process.env.MCP_SYNC_ENABLED !== 'false';
+const AUTO_UPDATE_ENABLED = process.env.MCP_AUTO_UPDATE !== 'false'; // Auto-update enabled by default
+const MCP_SERVER_VERSION = '2.0.0'; // Increment when adding new features
 
 // In-memory credential cache for sync
 interface CredentialCache {
@@ -195,10 +197,83 @@ async function syncCredentialsToClients(clientId: string, clientType: string) {
 /**
  * Initialize MCP Server
  */
+/**
+ * Check for MCP server updates
+ */
+async function checkForUpdates(): Promise<{ updateAvailable: boolean; latestVersion?: string; downloadUrl?: string }> {
+  if (!AUTO_UPDATE_ENABLED) {
+    return { updateAvailable: false };
+  }
+
+  try {
+    // Check version endpoint (to be implemented on server)
+    const response = await axios.get(`${MYKEYS_URL}/api/mcp/version`, {
+      headers: { 'Authorization': getAuthHeader() },
+      timeout: 5000,
+    });
+
+    if (response.data?.version && response.data.version !== MCP_SERVER_VERSION) {
+      return {
+        updateAvailable: true,
+        latestVersion: response.data.version,
+        downloadUrl: response.data.downloadUrl || `${MYKEYS_URL}/mcp-server.js`,
+      };
+    }
+
+    return { updateAvailable: false };
+  } catch (error) {
+    // Silently fail - don't block server startup
+    return { updateAvailable: false };
+  }
+}
+
+/**
+ * Get server capabilities and version
+ */
+async function getServerInfo() {
+  return {
+    name: 'mykeys-zip-mcp',
+    version: MCP_SERVER_VERSION,
+    capabilities: [
+      'secrets',
+      'rings',
+      'keys',
+      'vault',
+      'discovery',
+      'sync',
+    ],
+    tools: [
+      'get_secret',
+      'store_secret',
+      'list_secrets',
+      'list_rings',
+      'get_ring',
+      'list_ring_keys',
+      'store_vault_secret',
+      'get_vault_secret',
+      'list_vault_secrets',
+      'discover_rings',
+      'sync_credentials',
+      'register_client',
+    ],
+  };
+}
+
 async function initializeMCPServer() {
+  // Check for updates on startup
+  if (AUTO_UPDATE_ENABLED) {
+    const updateCheck = await checkForUpdates();
+    if (updateCheck.updateAvailable) {
+      console.error(`⚠️  MCP Server update available: ${updateCheck.latestVersion}`);
+      console.error(`   Current version: ${MCP_SERVER_VERSION}`);
+      console.error(`   Download: ${updateCheck.downloadUrl}`);
+      console.error(`   Or run: mykeys mcp update`);
+    }
+  }
+
   const server = new McpServer({
     name: 'mykeys-zip-mcp',
-    version: '1.0.0',
+    version: MCP_SERVER_VERSION,
   });
 
   // Register get_secret tool
@@ -309,6 +384,321 @@ async function initializeMCPServer() {
     }
   );
 
+  // Register ring management tools
+  server.registerTool(
+    'list_rings',
+    {
+      title: 'List Rings',
+      description: 'List all rings in mykeys.zip',
+      inputSchema: {
+        type: 'object',
+        properties: {},
+      },
+    },
+    async () => {
+      try {
+        const response = await axios.get(`${MYKEYS_URL}/api/admin/rings`, {
+          headers: { 'Authorization': getAuthHeader() },
+          timeout: 10000,
+        });
+        if (response.data?.status === 'success') {
+          return {
+            content: [{ type: 'text', text: JSON.stringify(response.data.data, null, 2) }],
+          };
+        }
+        return {
+          content: [{ type: 'text', text: 'Failed to list rings' }],
+          isError: true,
+        };
+      } catch (error: any) {
+        return {
+          content: [{ type: 'text', text: `Error: ${error.message}` }],
+          isError: true,
+        };
+      }
+    }
+  );
+
+  server.registerTool(
+    'get_ring',
+    {
+      title: 'Get Ring',
+      description: 'Get details of a specific ring',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          ring_id: {
+            type: 'string',
+            description: 'Ring ID',
+          },
+        },
+        required: ['ring_id'],
+      },
+    },
+    async ({ ring_id }) => {
+      try {
+        const response = await axios.get(`${MYKEYS_URL}/api/admin/rings/${ring_id}`, {
+          headers: { 'Authorization': getAuthHeader() },
+          timeout: 10000,
+        });
+        if (response.data?.status === 'success') {
+          return {
+            content: [{ type: 'text', text: JSON.stringify(response.data.data, null, 2) }],
+          };
+        }
+        return {
+          content: [{ type: 'text', text: `Ring ${ring_id} not found` }],
+          isError: true,
+        };
+      } catch (error: any) {
+        return {
+          content: [{ type: 'text', text: `Error: ${error.message}` }],
+          isError: true,
+        };
+      }
+    }
+  );
+
+  server.registerTool(
+    'list_ring_keys',
+    {
+      title: 'List Ring Keys',
+      description: 'List all keys in a ring',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          ring_id: {
+            type: 'string',
+            description: 'Ring ID',
+          },
+        },
+        required: ['ring_id'],
+      },
+    },
+    async ({ ring_id }) => {
+      try {
+        const response = await axios.get(`${MYKEYS_URL}/api/rings/${ring_id}/keys`, {
+          headers: { 'Authorization': getAuthHeader() },
+          timeout: 10000,
+        });
+        if (response.data?.status === 'success') {
+          return {
+            content: [{ type: 'text', text: JSON.stringify(response.data.data, null, 2) }],
+          };
+        }
+        return {
+          content: [{ type: 'text', text: `Failed to list keys for ring ${ring_id}` }],
+          isError: true,
+        };
+      } catch (error: any) {
+        return {
+          content: [{ type: 'text', text: `Error: ${error.message}` }],
+          isError: true,
+        };
+      }
+    }
+  );
+
+  server.registerTool(
+    'store_vault_secret',
+    {
+      title: 'Store Vault Secret',
+      description: 'Store a personal/sacred secret in a key\'s privacy vault (not shared with ring)',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          ring_id: {
+            type: 'string',
+            description: 'Ring ID',
+          },
+          key_name: {
+            type: 'string',
+            description: 'Key name',
+          },
+          vault_secret_name: {
+            type: 'string',
+            description: 'Name of the vault secret',
+          },
+          vault_secret_value: {
+            type: 'string',
+            description: 'Value of the vault secret',
+          },
+        },
+        required: ['ring_id', 'key_name', 'vault_secret_name', 'vault_secret_value'],
+      },
+    },
+    async ({ ring_id, key_name, vault_secret_name, vault_secret_value }) => {
+      try {
+        const response = await axios.post(
+          `${MYKEYS_URL}/api/rings/${ring_id}/keys/${key_name}/vault`,
+          {
+            vault_secret_name,
+            vault_secret_value,
+          },
+          {
+            headers: { 'Authorization': getAuthHeader() },
+            timeout: 10000,
+          }
+        );
+        if (response.data?.status === 'success') {
+          return {
+            content: [{ type: 'text', text: `Vault secret ${vault_secret_name} stored successfully` }],
+          };
+        }
+        return {
+          content: [{ type: 'text', text: `Failed to store vault secret` }],
+          isError: true,
+        };
+      } catch (error: any) {
+        return {
+          content: [{ type: 'text', text: `Error: ${error.message}` }],
+          isError: true,
+        };
+      }
+    }
+  );
+
+  server.registerTool(
+    'get_vault_secret',
+    {
+      title: 'Get Vault Secret',
+      description: 'Get a personal/sacred secret from a key\'s privacy vault',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          ring_id: {
+            type: 'string',
+            description: 'Ring ID',
+          },
+          key_name: {
+            type: 'string',
+            description: 'Key name',
+          },
+          vault_secret_name: {
+            type: 'string',
+            description: 'Name of the vault secret',
+          },
+        },
+        required: ['ring_id', 'key_name', 'vault_secret_name'],
+      },
+    },
+    async ({ ring_id, key_name, vault_secret_name }) => {
+      try {
+        const response = await axios.get(
+          `${MYKEYS_URL}/api/rings/${ring_id}/keys/${key_name}/vault/${vault_secret_name}`,
+          {
+            headers: { 'Authorization': getAuthHeader() },
+            timeout: 10000,
+          }
+        );
+        if (response.data?.status === 'success') {
+          return {
+            content: [{ type: 'text', text: response.data.data.vaultSecretValue }],
+          };
+        }
+        return {
+          content: [{ type: 'text', text: `Vault secret ${vault_secret_name} not found` }],
+          isError: true,
+        };
+      } catch (error: any) {
+        return {
+          content: [{ type: 'text', text: `Error: ${error.message}` }],
+          isError: true,
+        };
+      }
+    }
+  );
+
+  server.registerTool(
+    'list_vault_secrets',
+    {
+      title: 'List Vault Secrets',
+      description: 'List all vault secrets for a key',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          ring_id: {
+            type: 'string',
+            description: 'Ring ID',
+          },
+          key_name: {
+            type: 'string',
+            description: 'Key name',
+          },
+        },
+        required: ['ring_id', 'key_name'],
+      },
+    },
+    async ({ ring_id, key_name }) => {
+      try {
+        const response = await axios.get(
+          `${MYKEYS_URL}/api/rings/${ring_id}/keys/${key_name}/vault`,
+          {
+            headers: { 'Authorization': getAuthHeader() },
+            timeout: 10000,
+          }
+        );
+        if (response.data?.status === 'success') {
+          return {
+            content: [{ type: 'text', text: JSON.stringify(response.data.data.vaultSecrets, null, 2) }],
+          };
+        }
+        return {
+          content: [{ type: 'text', text: `Failed to list vault secrets` }],
+          isError: true,
+        };
+      } catch (error: any) {
+        return {
+          content: [{ type: 'text', text: `Error: ${error.message}` }],
+          isError: true,
+        };
+      }
+    }
+  );
+
+  server.registerTool(
+    'discover_rings',
+    {
+      title: 'Discover Rings',
+      description: 'Discover all rings in the ecosystem (minimal metadata only)',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          include_anonymous: {
+            type: 'boolean',
+            description: 'Include anonymous rings',
+            default: true,
+          },
+        },
+      },
+    },
+    async ({ include_anonymous = true }) => {
+      try {
+        const response = await axios.get(
+          `${MYKEYS_URL}/api/rings/discover?includeAnonymous=${include_anonymous}`,
+          {
+            headers: { 'Authorization': getAuthHeader() },
+            timeout: 10000,
+          }
+        );
+        if (response.data?.status === 'success') {
+          return {
+            content: [{ type: 'text', text: JSON.stringify(response.data.data, null, 2) }],
+          };
+        }
+        return {
+          content: [{ type: 'text', text: 'Failed to discover rings' }],
+          isError: true,
+        };
+      } catch (error: any) {
+        return {
+          content: [{ type: 'text', text: `Error: ${error.message}` }],
+          isError: true,
+        };
+      }
+    }
+  );
+
   // Register sync_credentials tool
   server.registerTool(
     'sync_credentials',
@@ -407,6 +797,69 @@ async function initializeMCPServer() {
     }
   );
 
+  // Register ring resources
+  server.registerResource(
+    'mykeys-ring',
+    new ResourceTemplate('mykeys://ring/{ring_id}', { list: undefined }),
+    {
+      title: 'MyKeys Ring',
+      description: 'Access ring information from mykeys.zip',
+    },
+    async (uri, { ring_id }) => {
+      try {
+        const response = await axios.get(`${MYKEYS_URL}/api/admin/rings/${ring_id}`, {
+          headers: { 'Authorization': getAuthHeader() },
+          timeout: 10000,
+        });
+        if (response.data?.status === 'success') {
+          return {
+            contents: [
+              {
+                uri: uri.href,
+                mimeType: 'application/json',
+                text: JSON.stringify(response.data.data, null, 2),
+              },
+            ],
+          };
+        }
+        throw new Error(`Ring ${ring_id} not found`);
+      } catch (error: any) {
+        throw new Error(`Error fetching ring: ${error.message}`);
+      }
+    }
+  );
+
+  server.registerResource(
+    'mykeys-ring-keys',
+    new ResourceTemplate('mykeys://ring/{ring_id}/keys', { list: undefined }),
+    {
+      title: 'MyKeys Ring Keys',
+      description: 'Access keys in a ring',
+    },
+    async (uri, { ring_id }) => {
+      try {
+        const response = await axios.get(`${MYKEYS_URL}/api/rings/${ring_id}/keys`, {
+          headers: { 'Authorization': getAuthHeader() },
+          timeout: 10000,
+        });
+        if (response.data?.status === 'success') {
+          return {
+            contents: [
+              {
+                uri: uri.href,
+                mimeType: 'application/json',
+                text: JSON.stringify(response.data.data, null, 2),
+              },
+            ],
+          };
+        }
+        throw new Error(`Failed to get keys for ring ${ring_id}`);
+      } catch (error: any) {
+        throw new Error(`Error fetching ring keys: ${error.message}`);
+      }
+    }
+  );
+
   // Register prompts using the high-level API
   server.registerPrompt(
     'get_secret_prompt',
@@ -476,6 +929,55 @@ async function initializeMCPServer() {
         },
       ],
     })
+  );
+
+  // Register server info tool
+  server.registerTool(
+    'get_server_info',
+    {
+      title: 'Get Server Info',
+      description: 'Get MCP server version, capabilities, and available tools',
+      inputSchema: {
+        type: 'object',
+        properties: {},
+      },
+    },
+    async () => {
+      const info = await getServerInfo();
+      return {
+        content: [{ type: 'text', text: JSON.stringify(info, null, 2) }],
+      };
+    }
+  );
+
+  // Register check updates tool
+  server.registerTool(
+    'check_updates',
+    {
+      title: 'Check Updates',
+      description: 'Check if MCP server update is available',
+      inputSchema: {
+        type: 'object',
+        properties: {},
+      },
+    },
+    async () => {
+      const updateCheck = await checkForUpdates();
+      return {
+        content: [{ 
+          type: 'text', 
+          text: JSON.stringify({
+            currentVersion: MCP_SERVER_VERSION,
+            updateAvailable: updateCheck.updateAvailable,
+            latestVersion: updateCheck.latestVersion,
+            downloadUrl: updateCheck.downloadUrl,
+            message: updateCheck.updateAvailable 
+              ? `Update available: ${updateCheck.latestVersion}. Download from ${updateCheck.downloadUrl} or run: mykeys mcp update`
+              : `MCP server is up to date (version ${MCP_SERVER_VERSION})`
+          }, null, 2) 
+        }],
+      };
+    }
   );
 
   return server;
