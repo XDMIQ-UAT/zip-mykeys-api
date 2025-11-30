@@ -220,6 +220,18 @@ async function isAdmin(identifier, ringId = null) {
   return hasRole(identifier, 'admin', ringId);
 }
 
+/**
+ * Check if user has any of the specified roles
+ * @param {string} identifier - User identifier (email or token)
+ * @param {string[]} roles - Array of roles to check
+ * @param {string} ringId - Optional ring ID
+ * @returns {Promise<boolean>} - True if user has any of the roles
+ */
+async function hasAnyRole(identifier, roles, ringId = null) {
+  const userRole = await getUserRoles(identifier, ringId);
+  return roles.includes(userRole);
+}
+
 module.exports = {
   getUserRoles,
   setUserRoles,
