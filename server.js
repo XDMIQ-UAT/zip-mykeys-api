@@ -1,5 +1,15 @@
 const express = require('express');
-const { SecretManagerServiceClient } = require('@google-cloud/secret-manager');
+// Conditionally require GCP Secret Manager (may not be available in serverless)
+let SecretManagerServiceClient = null;
+try {
+  if (process.env.VERCEL !== '1') {
+    // Only require GCP client in non-serverless environments
+    const gcpSecretManager = require('@google-cloud/secret-manager');
+    SecretManagerServiceClient = gcpSecretManager.SecretManagerServiceClient;
+  }
+} catch (error) {
+  console.warn('GCP Secret Manager package not available:', error.message);
+}
 // Use Vercel KV (Redis) - already connected in Vercel
 // Support both standard KV vars and mykeys_ prefixed vars
 const { createClient } = require('@vercel/kv');
@@ -115,12 +125,22 @@ const app = express();
 app.set('trust proxy', true);
 
 // Initialize GCP Secret Manager client (fallback for migration)
-let client;
-try {
-  client = new SecretManagerServiceClient();
-} catch (error) {
-  console.warn('GCP Secret Manager not available, using Upstash Redis only');
-  client = null;
+// In serverless environments, GCP client may not be available - make it optional
+let client = null;
+if (process.env.VERCEL !== '1' && SecretManagerServiceClient) {
+  // Only try to initialize GCP client in non-serverless environments
+  // In Vercel serverless, we use Redis/KV exclusively
+  try {
+    client = new SecretManagerServiceClient();
+  } catch (error) {
+    console.warn('GCP Secret Manager not available, using Upstash Redis only:', error.message);
+    client = null;
+  }
+} else {
+  // In Vercel serverless, skip GCP initialization entirely
+  if (process.env.VERCEL === '1') {
+    console.log('Vercel serverless detected - using Redis/KV only (GCP client skipped)');
+  }
 }
 const PROJECT_ID = process.env.GCP_PROJECT || 'myl-zip-www';
 // Force port 8080 for Google OAuth redirect URI compatibility
