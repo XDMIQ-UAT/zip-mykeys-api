@@ -255,6 +255,20 @@ This is an automated message. Please do not reply.
     console.error('  AWS_ACCESS_KEY_ID present:', hasAccessKey);
     console.error('  AWS_SECRET_ACCESS_KEY present:', hasSecretKey);
     
+    // Check for common SES errors
+    const errorCode = error.Code || error.name || '';
+    const errorMessage = error.message || '';
+    
+    // Sandbox mode error - email address not verified
+    if (errorCode === 'MessageRejected' || errorMessage.includes('Email address is not verified') || errorMessage.includes('not verified')) {
+      const sandboxError = `Email delivery failed: The recipient email address (${toEmail}) is not verified in AWS SES. ` +
+        `AWS SES is in sandbox mode, which only allows sending to verified email addresses. ` +
+        `To fix: 1) Verify the email in AWS SES Console, or 2) Request production access to remove sandbox restrictions. ` +
+        `Original error: ${errorMessage}`;
+      console.error('[email-service] Sandbox mode detected:', sandboxError);
+      throw new Error(sandboxError);
+    }
+    
     // If error mentions PLAIN, it might be trying SMTP instead of SDK
     if (error.message.includes('PLAIN') || error.message.includes('SMTP')) {
       throw new Error(`Email delivery failed: AWS SES SDK not initialized correctly. Check AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY environment variables. Original error: ${error.message}`);
