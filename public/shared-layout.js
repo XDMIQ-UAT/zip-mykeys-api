@@ -423,15 +423,32 @@
             // Force header and footer to full width with inline styles
             const insertedHeader = document.querySelector('.header');
             if (insertedHeader) {
-                // Remove from any parent that might constrain width
+                // CRITICAL: Ensure header is direct child of body
                 if (insertedHeader.parentElement !== document.body) {
                     const parent = insertedHeader.parentElement;
+                    const nextSibling = insertedHeader.nextSibling;
                     parent.removeChild(insertedHeader);
-                    document.body.insertBefore(insertedHeader, document.body.firstChild);
+                    if (nextSibling) {
+                        document.body.insertBefore(insertedHeader, nextSibling);
+                    } else {
+                        document.body.insertBefore(insertedHeader, document.body.firstChild);
+                    }
                 }
                 
-                // Force full width
-                insertedHeader.style.cssText = 'width: 100% !important; max-width: 100% !important; margin: 0 !important; padding: 0 !important; left: 0 !important; right: 0 !important; position: relative !important; transform: translateX(0) !important; box-sizing: border-box !important;';
+                // Use viewport-based positioning to break out of all constraints
+                const viewportWidth = window.innerWidth || document.documentElement.clientWidth;
+                insertedHeader.style.cssText = `
+                    position: relative !important;
+                    width: ${viewportWidth}px !important;
+                    max-width: 100vw !important;
+                    margin-left: calc(50% - 50vw) !important;
+                    margin-right: calc(50% - 50vw) !important;
+                    padding: 0 !important;
+                    left: 0 !important;
+                    right: 0 !important;
+                    transform: translateX(0) !important;
+                    box-sizing: border-box !important;
+                `.replace(/\s+/g, ' ').trim();
                 
                 // Ensure header container doesn't constrain width
                 const headerContainer = insertedHeader.querySelector('.container');
@@ -440,15 +457,27 @@
                 }
             }
             
-            // Remove footer from any parent that might constrain width
+            // CRITICAL: Ensure footer is direct child of body
             if (insertedFooter.parentElement !== document.body) {
                 const parent = insertedFooter.parentElement;
                 parent.removeChild(insertedFooter);
                 document.body.appendChild(insertedFooter);
             }
             
-            // Force full width
-            insertedFooter.style.cssText = 'width: 100% !important; max-width: 100% !important; margin: 0 !important; padding: 60px 0 30px !important; left: 0 !important; right: 0 !important; position: relative !important; transform: translateX(0) !important; box-sizing: border-box !important;';
+            // Use viewport-based positioning to break out of all constraints
+            const viewportWidth = window.innerWidth || document.documentElement.clientWidth;
+            insertedFooter.style.cssText = `
+                position: relative !important;
+                width: ${viewportWidth}px !important;
+                max-width: 100vw !important;
+                margin-left: calc(50% - 50vw) !important;
+                margin-right: calc(50% - 50vw) !important;
+                padding: 60px 0 30px !important;
+                left: 0 !important;
+                right: 0 !important;
+                transform: translateX(0) !important;
+                box-sizing: border-box !important;
+            `.replace(/\s+/g, ' ').trim();
             
             // Ensure footer container doesn't constrain width
             const footerContainer = insertedFooter.querySelector('.container');
