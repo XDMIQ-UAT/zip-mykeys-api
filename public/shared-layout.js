@@ -64,9 +64,12 @@
             position: sticky;
             top: 0;
             z-index: 100;
-            width: 100%;
-            margin: 0;
-            padding: 0;
+            width: 100vw !important;
+            max-width: 100% !important;
+            margin: 0 !important;
+            padding: 0 !important;
+            left: 0 !important;
+            right: 0 !important;
             box-sizing: border-box;
         }
         
@@ -130,9 +133,12 @@
             color: white;
             margin-top: auto;
             padding: 60px 0 30px;
-            width: 100%;
-            margin-left: 0;
-            margin-right: 0;
+            width: 100vw !important;
+            max-width: 100% !important;
+            margin-left: 0 !important;
+            margin-right: 0 !important;
+            left: 0 !important;
+            right: 0 !important;
             box-sizing: border-box;
         }
         
