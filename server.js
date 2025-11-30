@@ -1355,6 +1355,42 @@ const requireAdminRole = async (req, res, next) => {
 
 // ========== Google OAuth Endpoints ==========
 
+// Diagnostic endpoint to check OAuth configuration status (for debugging)
+app.get('/api/auth/google/status', (req, res) => {
+  try {
+    const clientId = process.env.GOOGLE_OAUTH_CLIENT_ID;
+    const clientSecret = process.env.GOOGLE_OAUTH_CLIENT_SECRET;
+    const redirectUri = process.env.GOOGLE_OAUTH_REDIRECT_URI;
+    const vercelEnv = process.env.VERCEL_ENV;
+    const nodeEnv = process.env.NODE_ENV;
+    const isConfigured = isGoogleOAuthConfigured();
+    
+    // Determine default redirect URI
+    const isProduction = vercelEnv === 'production' || nodeEnv === 'production';
+    const defaultRedirectUri = isProduction 
+      ? 'https://mykeys.zip/oauth2callback'
+      : 'http://localhost:5173/oauth2callback';
+    const finalRedirectUri = redirectUri || defaultRedirectUri;
+    
+    return sendResponse(res, 200, 'success', {
+      configured: isConfigured,
+      hasClientId: !!clientId,
+      hasClientSecret: !!clientSecret,
+      hasRedirectUri: !!redirectUri,
+      redirectUri: finalRedirectUri,
+      environment: {
+        vercelEnv: vercelEnv || 'not set',
+        nodeEnv: nodeEnv || 'not set',
+        isProduction: isProduction
+      }
+      // Note: We don't expose the actual values for security
+    }, null, 'OAuth configuration status');
+  } catch (error) {
+    console.error('Error checking OAuth status:', error.message);
+    return sendResponse(res, 500, 'failure', null, 'Failed to check OAuth status', 'An error occurred while checking OAuth configuration', error.message);
+  }
+});
+
 // Get Google OAuth authorization URL
 app.get('/api/auth/google/url', (req, res) => {
   try {
