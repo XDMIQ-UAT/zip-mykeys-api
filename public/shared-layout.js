@@ -461,17 +461,45 @@
             
             document.body.style.cssText = 'width: 100% !important; max-width: 100% !important; margin: 0 !important; padding: 0 !important; overflow-x: hidden !important;';
             
-            // Use requestAnimationFrame to ensure styles are applied after layout
+            // Use multiple approaches to ensure full width
+            const ensureFullWidth = (element, name) => {
+                if (!element) return;
+                
+                // Method 1: Set via cssText
+                element.style.cssText += 'width: 100% !important; max-width: 100% !important; margin-left: 0 !important; margin-right: 0 !important; padding-left: 0 !important; padding-right: 0 !important;';
+                
+                // Method 2: Calculate and set based on viewport
+                const viewportWidth = window.innerWidth || document.documentElement.clientWidth;
+                element.style.width = viewportWidth + 'px';
+                
+                // Method 3: Use negative margins if inside a container
+                const rect = element.getBoundingClientRect();
+                const bodyRect = document.body.getBoundingClientRect();
+                if (rect.left !== 0 || rect.right !== bodyRect.width) {
+                    const leftOffset = -rect.left;
+                    const rightOffset = bodyRect.width - rect.right;
+                    element.style.marginLeft = leftOffset + 'px';
+                    element.style.marginRight = rightOffset + 'px';
+                    element.style.width = `calc(100% + ${-leftOffset + rightOffset}px)`;
+                }
+                
+                console.log(`${name} width:`, element.offsetWidth, 'viewport:', viewportWidth, 'rect:', rect);
+            };
+            
+            // Apply immediately and after layout
+            ensureFullWidth(insertedHeader, 'Header');
+            ensureFullWidth(insertedFooter, 'Footer');
+            
             requestAnimationFrame(() => {
-                if (insertedHeader) {
-                    insertedHeader.style.width = '100%';
-                    insertedHeader.style.maxWidth = '100%';
-                }
-                if (insertedFooter) {
-                    insertedFooter.style.width = '100%';
-                    insertedFooter.style.maxWidth = '100%';
-                }
+                ensureFullWidth(insertedHeader, 'Header (after RAF)');
+                ensureFullWidth(insertedFooter, 'Footer (after RAF)');
             });
+            
+            // Also try after a short delay
+            setTimeout(() => {
+                ensureFullWidth(insertedHeader, 'Header (after delay)');
+                ensureFullWidth(insertedFooter, 'Footer (after delay)');
+            }, 100);
         }
     }
     
