@@ -1125,7 +1125,9 @@ app.post('/api/auth/request-mfa-code', async (req, res) => {
     } else if (email) {
       // Normalize email (trim + lowercase) for consistent storage/retrieval
       const normalizedEmail = email.trim().toLowerCase();
+      console.log(`[request-mfa-code] Attempting to send email code to: ${normalizedEmail}`);
       const emailResult = await send2FACodeViaEmail(normalizedEmail, code);
+      console.log(`[request-mfa-code] Email send result:`, { success: emailResult.success, error: emailResult.error });
       if (emailResult.success) {
         mfaCodes.set(normalizedEmail, {
           code,
@@ -1134,6 +1136,7 @@ app.post('/api/auth/request-mfa-code', async (req, res) => {
         });
         result = { success: true, method: 'email', target: normalizedEmail };
       } else {
+        console.error(`[request-mfa-code] Email send failed:`, emailResult.error);
         result = { success: false, error: emailResult.error || 'Failed to send email' };
       }
     }
@@ -1147,6 +1150,7 @@ app.post('/api/auth/request-mfa-code', async (req, res) => {
         message: `4-digit verification code sent to ${phoneNumber ? 'SMS' : 'email'}.`,
       });
     } else {
+      console.error(`[request-mfa-code] Failed to send verification code:`, result.error);
       res.status(500).json({
         error: 'Failed to send verification code',
         details: result.error || 'Unknown error',
@@ -1352,6 +1356,66 @@ const requireAdminRole = async (req, res, next) => {
     return sendResponse(res, 500, 'failure', null, 'Authentication error', 'An error occurred while checking permissions', error.message);
   }
 };
+
+// ========== Email Service Diagnostic Endpoint ==========
+
+// Diagnostic endpoint to check email service configuration (for debugging)
+app.get('/api/email/status', (req, res) => {
+  try {
+    const hasAccessKey = !!process.env.AWS_ACCESS_KEY_ID;
+    const hasSecretKey = !!process.env.AWS_SECRET_ACCESS_KEY;
+    const region = process.env.AWS_REGION || 'us-east-1';
+    const senderEmail = process.env.SES_SENDER_EMAIL || process.env.SES_FROM_EMAIL || 'hello@cosmiciq.org';
+    
+    // Check if email service can initialize
+    let canInitialize = false;
+    let initError = null;
+    try {
+      const { testConnection } = require('./email-service');
+      canInitialize = true;
+    } catch (error) {
+      initError = error.message;
+    }
+    
+    const envVarNames = Object.keys(process.env).filter(key => 
+      key.includes('AWS_') || key.includes('SES_')
+    );
+    const envVarInfo = {};
+    envVarNames.forEach(key => {
+      const value = process.env[key];
+      if (key.includes('SECRET') || key.includes('KEY')) {
+        envVarInfo[key] = value ? `***${value.slice(-4)}` : 'not set';
+      } else {
+        envVarInfo[key] = value || 'not set';
+      }
+    });
+    
+    console.log('[email-status] Configuration check:', {
+      hasAccessKey,
+      hasSecretKey,
+      region,
+      senderEmail,
+      canInitialize
+    });
+    
+    return sendResponse(res, 200, 'success', {
+      configured: hasAccessKey && hasSecretKey,
+      hasAccessKey,
+      hasSecretKey,
+      region,
+      senderEmail,
+      canInitialize,
+      initError,
+      debug: {
+        envVarNames: envVarNames,
+        envVarInfo: envVarInfo
+      }
+    }, null, 'Email service configuration status');
+  } catch (error) {
+    console.error('Error checking email status:', error.message);
+    return sendResponse(res, 500, 'failure', null, 'Failed to check email status', 'An error occurred while checking email configuration', error.message);
+  }
+});
 
 // ========== Google OAuth Endpoints ==========
 
