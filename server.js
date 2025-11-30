@@ -1372,6 +1372,30 @@ app.get('/api/auth/google/status', (req, res) => {
       : 'http://localhost:5173/oauth2callback';
     const finalRedirectUri = redirectUri || defaultRedirectUri;
     
+    // Debug: Log all Google OAuth related env vars (without exposing secrets)
+    const envVarNames = Object.keys(process.env).filter(key => 
+      key.includes('GOOGLE_OAUTH') || key.includes('VERCEL') || key.includes('NODE_ENV')
+    );
+    const envVarInfo = {};
+    envVarNames.forEach(key => {
+      const value = process.env[key];
+      if (key.includes('SECRET') || key.includes('CLIENT_SECRET')) {
+        envVarInfo[key] = value ? `***${value.slice(-4)}` : 'not set';
+      } else {
+        envVarInfo[key] = value ? (value.length > 50 ? `${value.substring(0, 50)}...` : value) : 'not set';
+      }
+    });
+    
+    console.log('[google-oauth-status] Environment check:', {
+      hasClientId: !!clientId,
+      hasClientSecret: !!clientSecret,
+      clientIdLength: clientId ? clientId.length : 0,
+      clientSecretLength: clientSecret ? clientSecret.length : 0,
+      vercelEnv,
+      nodeEnv,
+      allGoogleOAuthVars: envVarNames
+    });
+    
     return sendResponse(res, 200, 'success', {
       configured: isConfigured,
       hasClientId: !!clientId,
@@ -1382,6 +1406,12 @@ app.get('/api/auth/google/status', (req, res) => {
         vercelEnv: vercelEnv || 'not set',
         nodeEnv: nodeEnv || 'not set',
         isProduction: isProduction
+      },
+      debug: {
+        clientIdLength: clientId ? clientId.length : 0,
+        clientSecretLength: clientSecret ? clientSecret.length : 0,
+        envVarNames: envVarNames,
+        envVarInfo: envVarInfo
       }
       // Note: We don't expose the actual values for security
     }, null, 'OAuth configuration status');
