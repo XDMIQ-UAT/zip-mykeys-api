@@ -692,11 +692,18 @@
                     throw new Error(data.error || data.message || 'Failed to send verification code');
                 }
             } catch (error) {
-                tokenResult.classList.remove('success', 'show');
+                // COMPLETELY clear any previous state before showing error
+                tokenResult.classList.remove('success', 'error', 'show');
                 tokenResult.classList.add('error');
+                
+                // Clear all content first
+                resultTitle.textContent = '';
+                resultMessage.textContent = '';
+                tokenDisplay.innerHTML = '';
+                
+                // Now set error content
                 resultTitle.textContent = '❌ Failed to Send Code';
                 resultMessage.textContent = error.message || 'Failed to send verification code. Please try again.';
-                tokenDisplay.innerHTML = '';
                 
                 // Hide copy button when there's an error (no token to copy)
                 const copyBtn = document.getElementById('copyBtn');
