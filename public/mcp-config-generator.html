@@ -441,7 +441,7 @@
     <script>
         console.log('=== BEFORE shared-layout.js script tag ===');
     </script>
-    <script src="/shared-layout.js" onerror="console.error('FAILED to load shared-layout.js')" onload="console.log('SUCCESS loading shared-layout.js')"></script>
+    <script src="/shared-layout.js?v=2" onerror="alert('FAILED to load shared-layout.js')" onload="document.body.setAttribute('data-layout-loaded', 'true')"></script>
     <script>
         console.log('=== AFTER shared-layout.js script tag ===');
     </script>

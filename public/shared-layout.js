@@ -448,146 +448,56 @@ try {
                 text.style.display = 'block';
             });
             
-            // Force header and footer to full width with inline styles
-            const insertedHeader = document.querySelector('.header');
-            if (insertedHeader) {
-                // CRITICAL: Ensure header is direct child of body
-                if (insertedHeader.parentElement !== document.body) {
-                    const parent = insertedHeader.parentElement;
-                    const nextSibling = insertedHeader.nextSibling;
-                    parent.removeChild(insertedHeader);
-                    if (nextSibling) {
-                        document.body.insertBefore(insertedHeader, nextSibling);
-                    } else {
-                        document.body.insertBefore(insertedHeader, document.body.firstChild);
+            // SIMPLE DIRECT APPROACH: Force full width using multiple methods
+            const forceFullWidth = () => {
+                const header = document.querySelector('.header');
+                const footer = document.querySelector('.footer');
+                const viewportWidth = window.innerWidth || document.documentElement.clientWidth;
+                
+                [header, footer].forEach((el, idx) => {
+                    if (!el) return;
+                    const name = idx === 0 ? 'header' : 'footer';
+                    
+                    // Ensure it's direct child of body
+                    if (el.parentElement !== document.body) {
+                        const parent = el.parentElement;
+                        parent.removeChild(el);
+                        if (name === 'header') {
+                            document.body.insertBefore(el, document.body.firstChild);
+                        } else {
+                            document.body.appendChild(el);
+                        }
                     }
-                }
-                
-                // Use absolute positioning to break out of all constraints
-                const viewportWidth = window.innerWidth || document.documentElement.clientWidth;
-                const bodyRect = document.body.getBoundingClientRect();
-                const headerRect = insertedHeader.getBoundingClientRect();
-                
-                // Calculate offset from viewport
-                const leftOffset = -headerRect.left;
-                const rightOffset = viewportWidth - headerRect.right;
-                
-                insertedHeader.style.cssText = `
-                    position: relative !important;
-                    width: ${viewportWidth}px !important;
-                    max-width: ${viewportWidth}px !important;
-                    margin-left: ${leftOffset}px !important;
-                    margin-right: ${rightOffset}px !important;
-                    padding: 0 !important;
-                    left: 0 !important;
-                    right: 0 !important;
-                    transform: translateX(0) !important;
-                    box-sizing: border-box !important;
-                `.replace(/\s+/g, ' ').trim();
-                
-                // Ensure header container doesn't constrain width
-                const headerContainer = insertedHeader.querySelector('.container');
-                if (headerContainer) {
-                    headerContainer.style.cssText = 'max-width: 1200px !important; margin: 0 auto !important; padding: 0 20px !important; width: 100% !important; box-sizing: border-box !important;';
-                }
-            }
-            
-            // CRITICAL: Ensure footer is direct child of body
-            if (insertedFooter.parentElement !== document.body) {
-                const parent = insertedFooter.parentElement;
-                parent.removeChild(insertedFooter);
-                document.body.appendChild(insertedFooter);
-            }
-            
-            // Use absolute positioning to break out of all constraints
-            const viewportWidth = window.innerWidth || document.documentElement.clientWidth;
-            const footerRect = insertedFooter.getBoundingClientRect();
-            
-            // Calculate offset from viewport
-            const leftOffset = -footerRect.left;
-            const rightOffset = viewportWidth - footerRect.right;
-            
-            insertedFooter.style.cssText = `
-                position: relative !important;
-                width: ${viewportWidth}px !important;
-                max-width: ${viewportWidth}px !important;
-                margin-left: ${leftOffset}px !important;
-                margin-right: ${rightOffset}px !important;
-                padding: 60px 0 30px !important;
-                left: 0 !important;
-                right: 0 !important;
-                transform: translateX(0) !important;
-                box-sizing: border-box !important;
-            `.replace(/\s+/g, ' ').trim();
-            
-            // Ensure footer container doesn't constrain width
-            const footerContainer = insertedFooter.querySelector('.container');
-            if (footerContainer) {
-                footerContainer.style.cssText = 'max-width: 1200px !important; margin: 0 auto !important; padding: 0 20px !important; width: 100% !important; box-sizing: border-box !important;';
-            }
-            
-            // Also ensure html and body are full width
-            document.documentElement.style.cssText = 'width: 100% !important; max-width: 100% !important; margin: 0 !important; padding: 0 !important; overflow-x: hidden !important;';
-            
-            document.body.style.cssText = 'width: 100% !important; max-width: 100% !important; margin: 0 !important; padding: 0 !important; overflow-x: hidden !important;';
-            
-            // Use multiple approaches to ensure full width
-            const ensureFullWidth = (element, name) => {
-                if (!element) {
-                    return;
-                }
-                
-                const viewportWidth = window.innerWidth || document.documentElement.clientWidth;
-                const rect = element.getBoundingClientRect();
-                
-                // Calculate exact offsets needed
-                const leftOffset = -rect.left;
-                const rightOffset = viewportWidth - rect.right;
-                const totalWidth = viewportWidth + leftOffset + rightOffset;
-                
-                // Apply calculated margins and width
-                element.style.marginLeft = leftOffset + 'px';
-                element.style.marginRight = rightOffset + 'px';
-                element.style.width = totalWidth + 'px';
-                element.style.maxWidth = totalWidth + 'px';
-                element.style.position = 'relative';
-                element.style.boxSizing = 'border-box';
-                element.style.paddingLeft = '0';
-                element.style.paddingRight = '0';
+                    
+                    // Get current position
+                    const rect = el.getBoundingClientRect();
+                    const leftOffset = -rect.left;
+                    const rightOffset = viewportWidth - rect.right;
+                    const totalWidth = viewportWidth + leftOffset + rightOffset;
+                    
+                    // Apply styles directly
+                    el.style.setProperty('margin-left', leftOffset + 'px', 'important');
+                    el.style.setProperty('margin-right', rightOffset + 'px', 'important');
+                    el.style.setProperty('width', totalWidth + 'px', 'important');
+                    el.style.setProperty('max-width', totalWidth + 'px', 'important');
+                    el.style.setProperty('position', 'relative', 'important');
+                    el.style.setProperty('box-sizing', 'border-box', 'important');
+                    el.style.setProperty('padding-left', '0', 'important');
+                    el.style.setProperty('padding-right', '0', 'important');
+                });
             };
             
-            // Apply immediately and after layout
-            console.log('About to call ensureFullWidth for Header:', !!insertedHeader);
-            console.log('About to call ensureFullWidth for Footer:', !!insertedFooter);
+            // Apply immediately
+            forceFullWidth();
             
-            if (insertedHeader) {
-                ensureFullWidth(insertedHeader, 'Header');
-            } else {
-                console.error('Header element not found when trying to ensure full width!');
-            }
+            // Apply after layout
+            requestAnimationFrame(forceFullWidth);
+            setTimeout(forceFullWidth, 50);
+            setTimeout(forceFullWidth, 200);
+            setTimeout(forceFullWidth, 500);
             
-            if (insertedFooter) {
-                ensureFullWidth(insertedFooter, 'Footer');
-            } else {
-                console.error('Footer element not found when trying to ensure full width!');
-            }
-            
-            requestAnimationFrame(() => {
-                const header = document.querySelector('.header');
-                const footer = document.querySelector('.footer');
-                console.log('After RAF - Header:', !!header, 'Footer:', !!footer);
-                if (header) ensureFullWidth(header, 'Header (after RAF)');
-                if (footer) ensureFullWidth(footer, 'Footer (after RAF)');
-            });
-            
-            // Also try after a short delay
-            setTimeout(() => {
-                const header = document.querySelector('.header');
-                const footer = document.querySelector('.footer');
-                console.log('After delay - Header:', !!header, 'Footer:', !!footer);
-                if (header) ensureFullWidth(header, 'Header (after delay)');
-                if (footer) ensureFullWidth(footer, 'Footer (after delay)');
-            }, 100);
+            // Also on resize
+            window.addEventListener('resize', forceFullWidth);
         }
     }
     
