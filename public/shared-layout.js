@@ -401,6 +401,28 @@
                 text.style.opacity = '1';
                 text.style.display = 'block';
             });
+            
+            // Force header and footer to full width with inline styles
+            const insertedHeader = document.querySelector('.header');
+            if (insertedHeader) {
+                insertedHeader.style.width = '100vw';
+                insertedHeader.style.maxWidth = '100%';
+                insertedHeader.style.marginLeft = '0';
+                insertedHeader.style.marginRight = '0';
+                insertedHeader.style.paddingLeft = '0';
+                insertedHeader.style.paddingRight = '0';
+                insertedHeader.style.left = '0';
+                insertedHeader.style.right = '0';
+            }
+            
+            insertedFooter.style.width = '100vw';
+            insertedFooter.style.maxWidth = '100%';
+            insertedFooter.style.marginLeft = '0';
+            insertedFooter.style.marginRight = '0';
+            insertedFooter.style.paddingLeft = '0';
+            insertedFooter.style.paddingRight = '0';
+            insertedFooter.style.left = '0';
+            insertedFooter.style.right = '0';
         }
     }
     
