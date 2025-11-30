@@ -766,6 +766,13 @@
                     tokenDisplay.innerHTML = `
                         <div class="token-value">${data.token}</div>
                     `;
+                    
+                    // Show copy button only when token is available
+                    const copyBtn = document.getElementById('copyBtn');
+                    if (copyBtn) {
+                        copyBtn.style.display = 'block';
+                    }
+                    
                     tokenResult.classList.add('show');
                     
                     // Hide step 2
@@ -781,6 +788,16 @@
                 resultTitle.textContent = '❌ Verification Failed';
                 resultMessage.textContent = error.message || 'The verification code is incorrect or token generation failed. Please try again.';
                 tokenDisplay.innerHTML = '';
+                
+                // Hide copy button when there's an error (no token to copy)
+                const copyBtn = document.getElementById('copyBtn');
+                if (copyBtn) {
+                    copyBtn.style.display = 'none';
+                }
+                
+                // Clear generated token since generation failed
+                generatedToken = '';
+                
                 tokenResult.classList.add('show');
             } finally {
                 loading.classList.remove('show');
@@ -797,30 +814,31 @@
         
         
         function copyToken() {
-            if (generatedToken) {
-                navigator.clipboard.writeText(generatedToken).then(() => {
-                    const btn = document.getElementById('copyBtn');
-                    if (btn) {
-                        const originalText = btn.textContent;
-                        btn.textContent = '✓ Copied!';
-                        btn.style.background = '#28a745';
-                        btn.style.color = '#ffffff';
-                        setTimeout(() => {
-                            btn.textContent = originalText;
-                            btn.style.background = '';
-                            btn.style.color = '';
-                        }, 2000);
-                    } else {
-                        console.error('Copy button not found');
-                        alert('Token copied to clipboard!');
-                    }
-                }).catch((err) => {
-                    console.error('Failed to copy token:', err);
-                    alert('Failed to copy token. Please copy manually.');
-                });
-            } else {
-                alert('No token to copy. Please generate a token first.');
+            if (!generatedToken) {
+                console.warn('Copy token called but no token available');
+                return; // Don't show alert, button should be hidden anyway
             }
+            
+            navigator.clipboard.writeText(generatedToken).then(() => {
+                const btn = document.getElementById('copyBtn');
+                if (btn) {
+                    const originalText = btn.textContent;
+                    btn.textContent = '✓ Copied!';
+                    btn.style.background = '#28a745';
+                    btn.style.color = '#ffffff';
+                    setTimeout(() => {
+                        btn.textContent = originalText;
+                        btn.style.background = '';
+                        btn.style.color = '';
+                    }, 2000);
+                } else {
+                    console.error('Copy button not found');
+                    alert('Token copied to clipboard!');
+                }
+            }).catch((err) => {
+                console.error('Failed to copy token:', err);
+                alert('Failed to copy token. Please copy manually.');
+            });
         }
     </script>
     </div>
