@@ -9,6 +9,10 @@ on:
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    # Disabled: Using Vercel connected repository for automatic deployments
+    # This prevents double deployments (Vercel auto-deploy + GitHub Actions)
+    # To re-enable: Remove the if: false line below
+    if: false
     steps:
       - name: Checkout code
         uses: actions/checkout@v4

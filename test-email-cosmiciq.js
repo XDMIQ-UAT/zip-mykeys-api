@@ -11,7 +11,7 @@ process.env.SES_SENDER_EMAIL = 'hello@cosmiciq.org';
 
 const https = require('https');
 
-const API_URL = process.env.API_URL || 'https://zip-myl-mykeys-api.vercel.app';
+const API_URL = process.env.API_URL || 'https://zip-mykeys-api.vercel.app';
 const TEST_EMAIL = process.argv[2] || process.env.TEST_EMAIL || 'bcherrman@gmail.com';
 
 async function testEmailAPI() {

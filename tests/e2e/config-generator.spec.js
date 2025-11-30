@@ -2,9 +2,22 @@ const { test, expect } = require('@playwright/test');
 
 test.describe('MCP Config Generator', () => {
   test.beforeEach(async ({ page }) => {
-    await page.goto('https://mykeys.zip/mcp-config-generator.html');
+    await page.goto('/mcp-config-generator.html');
     // Wait for page to load
     await expect(page.locator('h1')).toHaveText('🔧 MCP Configuration Generator');
+  });
+
+  test('should start with email MFA flow (not username/password)', async ({ page }) => {
+    // Click on the token tab
+    await page.click('.tab[data-tab="token"]');
+    
+    // Should show email input (not username/password)
+    await expect(page.locator('#tokenEmail')).toBeVisible();
+    await expect(page.locator('#tokenEmail')).toHaveAttribute('type', 'email');
+    
+    // Should NOT show username/password fields
+    await expect(page.locator('#username')).toHaveCount(0);
+    await expect(page.locator('#password')).toHaveCount(0);
   });
 
   test('should display config form', async ({ page }) => {

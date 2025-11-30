@@ -23,7 +23,7 @@ This is the backend API service for **https://mykeys.zip**, designed to be used 
 ## Project Structure
 
 ```
-E:\zip-myl-mykeys-api\
+E:\zip-mykeys-api\
 ├── server.js              # Main application server (unified backend)
 ├── package.json           # Node.js dependencies
 ├── Dockerfile             # Container configuration
@@ -96,7 +96,7 @@ MASTER_KEY=...                       # Master key for encryption (auto-generated
 ### Local Development
 
 ```bash
-cd E:\zip-myl-mykeys-api
+cd E:\zip-mykeys-api
 npm install
 npm run dev
 ```
@@ -113,7 +113,7 @@ npm run deploy
 
 1. Upload files to VM:
 ```bash
-gcloud compute scp --recurse E:\zip-myl-mykeys-api mykeys-vm:/var/www/mykeys --zone=us-central1-a
+gcloud compute scp --recurse E:\zip-mykeys-api mykeys-vm:/var/www/mykeys --zone=us-central1-a
 ```
 
 2. SSH into VM:
@@ -141,7 +141,7 @@ sudo systemctl restart nginx
 
 This repository was refactored to consolidate:
 - **Main Backend** (from `C:\users\dash\projects\myl\secrets-manager\`)
-- **Passthrough Service** (from `E:\zip-myl-mykeys-api\`)
+- **Passthrough Service** (from `E:\zip-mykeys-api\`)
 
 The unified server now:
 - Directly integrates with GCP Secret Manager (no passthrough needed)

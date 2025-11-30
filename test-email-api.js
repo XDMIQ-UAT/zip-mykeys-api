@@ -5,7 +5,7 @@
 
 const https = require('https');
 
-const API_URL = process.env.API_URL || 'https://zip-myl-mykeys-api.vercel.app';
+const API_URL = process.env.API_URL || 'https://zip-mykeys-api.vercel.app';
 const TEST_EMAIL = process.argv[2] || process.env.TEST_EMAIL;
 
 if (!TEST_EMAIL) {
