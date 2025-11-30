@@ -5,8 +5,12 @@
  * Usage: <script src="/shared-layout.js"></script>
  */
 
+console.log('=== shared-layout.js STARTING ===');
+
 (function() {
     'use strict';
+    
+    console.log('=== shared-layout.js IIFE EXECUTING ===');
     
     const headerHTML = `
         <header class="header" style="width: 100%; margin: 0; padding: 0; position: relative; left: 0; right: 0;">
