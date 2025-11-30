@@ -755,8 +755,8 @@
                     // Token generated immediately (CLI/web sync)
                     generatedToken = data.token;
                     
-                    // Show token result
-                    tokenResult.classList.remove('error');
+                    // Clear any previous error state and show success
+                    tokenResult.classList.remove('error', 'show');
                     tokenResult.classList.add('success');
                     resultTitle.textContent = '✅ Token Generated Successfully!';
                     resultMessage.innerHTML = `
@@ -775,7 +775,8 @@
                     throw new Error(data.error || data.message || 'Failed to generate token');
                 }
             } catch (error) {
-                tokenResult.classList.remove('success');
+                // Clear any previous success state and show error
+                tokenResult.classList.remove('success', 'show');
                 tokenResult.classList.add('error');
                 resultTitle.textContent = '❌ Verification Failed';
                 resultMessage.textContent = error.message || 'The verification code is incorrect or token generation failed. Please try again.';
