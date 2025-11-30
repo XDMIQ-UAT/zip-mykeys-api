@@ -32,7 +32,11 @@ Google OAuth adds an extra layer of security to admin pages by:
 
 ### 2. Set Environment Variables
 
-Add these environment variables to Vercel:
+Add these environment variables to Vercel **at the project level** (not team level):
+
+**Important:** Go to the project settings, not team settings:
+- Project: https://vercel.com/xdmiq/zip-myl-mykeys-api/settings/environment-variables
+- Team variables are NOT automatically shared with projects
 
 **Production:**
 - `GOOGLE_OAUTH_CLIENT_ID` - Your OAuth Client ID
