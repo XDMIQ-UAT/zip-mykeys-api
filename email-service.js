@@ -208,6 +208,10 @@ This is an automated message. Please do not reply.
   try {
     const client = getSESClient();
     
+    // Log sender email for debugging (after trimming)
+    console.log(`[email-service] Sending email from: "${DEFAULT_SENDER}" (length: ${DEFAULT_SENDER.length})`);
+    console.log(`[email-service] Sending email to: ${toEmail}`);
+    
     // Improved subject line (less spammy - removed "authentication code")
     const subject = `Your MyKeys verification code`;
     
