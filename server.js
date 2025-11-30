@@ -743,6 +743,15 @@ app.get('/api/v1/secrets/:ecosystem/:secretName', authenticate, async (req, res)
     const ringId = req.ringId; // From authenticate middleware
     const userEmail = req.userEmail; // From authentication
     
+    // SECURITY: Require ringId for all authenticated requests (except basic auth admin)
+    // Users can only access secrets from their own ring/vault
+    if (!ringId && req.authType !== 'basic') {
+      return res.status(403).json({
+        error: 'Access denied',
+        message: 'Ring ID is required. You can only access secrets from your own vault/key ring.'
+      });
+    }
+    
     // Ensure ring is registered
     if (ringId) {
       await updateRingMetadata(ringId, {}); // Update lastSeen
@@ -880,6 +889,15 @@ app.get('/api/v1/secrets/:ecosystem', authenticate, async (req, res) => {
     const ringId = req.ringId; // From authenticate middleware
     const userEmail = req.userEmail;
     
+    // SECURITY: Require ringId for all authenticated requests (except basic auth admin)
+    // Users can only access secrets from their own ring/vault
+    if (!ringId && req.authType !== 'basic') {
+      return res.status(403).json({
+        error: 'Access denied',
+        message: 'Ring ID is required. You can only access secrets from your own vault/key ring.'
+      });
+    }
+    
     // Verify user has access to this ring
     if (ringId && userEmail) {
       const hasAccess = await hasRingAccess(userEmail, ringId);
@@ -903,17 +921,28 @@ app.get('/api/v1/secrets/:ecosystem', authenticate, async (req, res) => {
         });
         
         // Filter secrets by ring and ecosystem
+        // SECURITY: Strictly enforce ring isolation - only show secrets from user's ring
         ecosystemSecrets = secrets
           .filter(secret => {
             const name = secret.name.split('/').pop();
             const labels = secret.labels || {};
             const secretRingId = labels.ringId || (name.startsWith('ring-') ? name.split('-')[1] : null);
             
-            // Only show secrets from user's ring
-            if (ringId && secretRingId !== ringId) {
-              return false;
+            // SECURITY FIX: If user has a ringId, ONLY show secrets from that ring
+            // If user doesn't have a ringId (basic auth admin), only show secrets without ringId labels
+            if (ringId) {
+              // User has a ring - only show secrets from their ring
+              if (secretRingId !== ringId) {
+                return false;
+              }
+            } else {
+              // Basic auth admin - only show secrets without ring labels (legacy/unscoped secrets)
+              if (secretRingId) {
+                return false; // Don't show ring-scoped secrets to admin
+              }
             }
             
+            // Filter by ecosystem name
             return name.startsWith(`${ecosystem}-`) || labels.ecosystem === ecosystem;
           })
           .map(secret => ({
@@ -1009,7 +1038,131 @@ app.get('/api/tld/:domain', authenticate, async (req, res) => {
 
 // Generate MCP token (requires admin auth)
 // In-memory storage for MFA codes (phone/email -> code mapping)
-const mfaCodes = new Map(); // phone/email -> { code, expiresAt, verificationSid }
+// MFA codes storage - using KV for serverless compatibility
+// Key format: mfa:code:{identifier} -> { code, expiresAt, verificationSid }
+async function storeMFACode(identifier, code, expiresAt, verificationSid = null) {
+  const kv = getKV();
+  console.log(`[storeMFACode] KV client available: ${!!kv}, identifier: ${identifier}`);
+  if (!kv) {
+    console.error('[storeMFACode] KV not available, falling back to in-memory');
+    console.error('[storeMFACode] KV env vars - URL: ' + (process.env.KV_REST_API_URL || process.env.mykeys_KV_REST_API_URL || 'not set'));
+    console.error('[storeMFACode] KV env vars - TOKEN: ' + (process.env.KV_REST_API_TOKEN || process.env.mykeys_KV_REST_API_TOKEN ? 'set' : 'not set'));
+    // Fallback to in-memory for local dev
+    if (!global.mfaCodes) global.mfaCodes = new Map();
+    global.mfaCodes.set(identifier, { code, expiresAt, verificationSid });
+    return;
+  }
+  
+  try {
+    const key = `mfa:code:${identifier}`;
+    const ttlSeconds = Math.max(1, Math.ceil((expiresAt - Date.now()) / 1000));
+    // Ensure code is always stored as string
+    const codeString = String(code);
+    const value = JSON.stringify({ code: codeString, expiresAt, verificationSid });
+    
+    // Try Redis-compatible setex first (if available)
+    if (typeof kv.setex === 'function') {
+      await kv.setex(key, ttlSeconds, value);
+      console.log(`[storeMFACode] Stored code for ${identifier} using setex, expires in ${ttlSeconds}s`);
+    } else if (typeof kv.set === 'function') {
+      // Try with expiration option
+      try {
+        await kv.set(key, value, { ex: ttlSeconds });
+        console.log(`[storeMFACode] Stored code for ${identifier} with expiration, expires in ${ttlSeconds}s`);
+      } catch (exError) {
+        // If expiration option doesn't work, store without expiration and rely on expiresAt check
+        await kv.set(key, value);
+        console.log(`[storeMFACode] Stored code for ${identifier} without expiration (will check expiresAt)`);
+      }
+    } else {
+      throw new Error('KV client does not support set or setex');
+    }
+  } catch (error) {
+    console.error(`[storeMFACode] Failed to store code in KV:`, error.message, error.stack);
+    // Fallback to in-memory
+    if (!global.mfaCodes) global.mfaCodes = new Map();
+    global.mfaCodes.set(identifier, { code, expiresAt, verificationSid });
+    console.log(`[storeMFACode] Falled back to in-memory storage for ${identifier}`);
+  }
+}
+
+async function getMFACode(identifier) {
+  const kv = getKV();
+  console.log(`[getMFACode] KV client available: ${!!kv}, identifier: ${identifier}`);
+  if (!kv) {
+    console.error('[getMFACode] KV not available, checking in-memory fallback');
+    // Fallback to in-memory for local dev
+    if (!global.mfaCodes) {
+      console.log('[getMFACode] No in-memory fallback available');
+      return null;
+    }
+    const memCode = global.mfaCodes.get(identifier);
+    console.log(`[getMFACode] In-memory code found: ${!!memCode}`);
+    return memCode || null;
+  }
+  
+  try {
+    const key = `mfa:code:${identifier}`;
+    console.log(`[getMFACode] Looking up key: ${key}`);
+    const data = await kv.get(key);
+    console.log(`[getMFACode] KV get result: ${data ? 'found' : 'not found'}`);
+    if (!data || data === null) {
+      console.log(`[getMFACode] No code found for identifier: ${identifier}, key: ${key}`);
+      return null;
+    }
+    
+    try {
+      // Vercel KV might return the value as an object already, or as a string
+      let parsed;
+      if (typeof data === 'string') {
+        parsed = JSON.parse(data);
+      } else if (typeof data === 'object' && data !== null) {
+        // Already an object, use it directly
+        parsed = data;
+      } else {
+        console.error(`[getMFACode] Unexpected data type: ${typeof data}`);
+        return null;
+      }
+      
+      // Ensure code is always a string (JSON.parse might convert numeric strings to numbers)
+      if (parsed.code !== undefined) {
+        parsed.code = String(parsed.code);
+      }
+      
+      console.log(`[getMFACode] Found code for ${identifier}, code: "${parsed.code}", type: ${typeof parsed.code}, expires at: ${new Date(parsed.expiresAt).toISOString()}`);
+      return parsed;
+    } catch (e) {
+      console.error('[getMFACode] Failed to parse stored code:', e, 'Data type:', typeof data, 'Data:', data);
+      return null;
+    }
+  } catch (error) {
+    console.error(`[getMFACode] Error retrieving code from KV:`, error.message);
+    // Fallback to in-memory
+    if (!global.mfaCodes) return null;
+    return global.mfaCodes.get(identifier) || null;
+  }
+}
+
+async function deleteMFACode(identifier) {
+  const kv = getKV();
+  if (!kv) {
+    // Fallback to in-memory for local dev
+    if (!global.mfaCodes) return;
+    global.mfaCodes.delete(identifier);
+    return;
+  }
+  
+  try {
+    const key = `mfa:code:${identifier}`;
+    await kv.del(key);
+    console.log(`[deleteMFACode] Deleted code for ${identifier}`);
+  } catch (error) {
+    console.error(`[deleteMFACode] Error deleting code from KV:`, error.message);
+    // Fallback to in-memory
+    if (!global.mfaCodes) return;
+    global.mfaCodes.delete(identifier);
+  }
+}
 
 // Helper function to generate 4-digit code
 function generate4DigitCode() {
@@ -1114,29 +1267,66 @@ app.post('/api/auth/request-mfa-code', async (req, res) => {
       // Determine service name from request (defaults to 'mykeys')
       const serviceName = req.body.service || 'mykeys';
       // For SMS, send the 4-digit code via Twilio
+      // Delete any existing code for this identifier first (in case of multiple requests)
+      await deleteMFACode(normalizedPhone);
+      console.log(`[request-mfa-code] Cleared any existing code for ${normalizedPhone}`);
+      
       result = await send2FACodeViaSMS(normalizedPhone, code, false, serviceName);
       if (result.success) {
-        mfaCodes.set(normalizedPhone, {
-          code,
-          expiresAt,
-          verificationSid: result.verificationSid,
-        });
+        await storeMFACode(normalizedPhone, code, expiresAt, result.verificationSid);
+        console.log(`[request-mfa-code] Code "${code}" stored for identifier: ${normalizedPhone}`);
       }
     } else if (email) {
       // Normalize email (trim + lowercase) for consistent storage/retrieval
       const normalizedEmail = email.trim().toLowerCase();
-      console.log(`[request-mfa-code] Attempting to send email code to: ${normalizedEmail}`);
+      console.log(`[request-mfa-code] Attempting to send email code to: "${normalizedEmail}"`);
+      console.log(`[request-mfa-code] Email length: ${normalizedEmail.length}`);
+      console.log(`[request-mfa-code] Generated code: ${code}, expires at: ${new Date(expiresAt).toISOString()}`);
+      console.log(`[request-mfa-code] Will store with identifier: "${normalizedEmail}"`);
+      // Delete any existing code for this identifier first (in case of multiple requests)
+      await deleteMFACode(normalizedEmail);
+      console.log(`[request-mfa-code] Cleared any existing code for ${normalizedEmail}`);
+      
+      // Store the code FIRST before sending email to ensure it's available immediately
+      await storeMFACode(normalizedEmail, code, expiresAt, null);
+      console.log(`[request-mfa-code] Code "${code}" stored FIRST for identifier: ${normalizedEmail}`);
+      
+      // Verify the code was stored correctly
+      const verifyStored = await getMFACode(normalizedEmail);
+      if (verifyStored && verifyStored.code) {
+        const storedCodeStr = String(verifyStored.code);
+        console.log(`[request-mfa-code] Verified stored code: "${storedCodeStr}", matches generated: ${storedCodeStr === String(code)}`);
+        if (storedCodeStr !== String(code)) {
+          console.error(`[request-mfa-code] CODE MISMATCH! Generated: "${code}", Stored: "${storedCodeStr}"`);
+        }
+      } else {
+        console.error(`[request-mfa-code] Failed to verify stored code - code not found after storage!`);
+      }
+      
+      // Now send the email with the code - verify it matches what we stored
+      console.log(`[request-mfa-code] Sending email with code: "${code}"`);
       const emailResult = await send2FACodeViaEmail(normalizedEmail, code);
       console.log(`[request-mfa-code] Email send result:`, { success: emailResult.success, error: emailResult.error });
+      
+      // Double-check stored code matches what we're sending
+      const finalCheck = await getMFACode(normalizedEmail);
+      if (finalCheck && finalCheck.code) {
+        const finalCodeStr = String(finalCheck.code);
+        if (finalCodeStr !== String(code)) {
+          console.error(`[request-mfa-code] CRITICAL: Code mismatch after email send! Email sent: "${code}", Stored: "${finalCodeStr}"`);
+          // Delete the mismatched code to prevent confusion
+          await deleteMFACode(normalizedEmail);
+          throw new Error('Code storage mismatch detected. Please try again.');
+        }
+        console.log(`[request-mfa-code] Final verification: Email code "${code}" matches stored code "${finalCodeStr}" ✓`);
+      }
+      
       if (emailResult.success) {
-        mfaCodes.set(normalizedEmail, {
-          code,
-          expiresAt,
-          verificationSid: null,
-        });
         result = { success: true, method: 'email', target: normalizedEmail };
       } else {
         console.error(`[request-mfa-code] Email send failed:`, emailResult.error);
+        // If email failed, delete the stored code since email wasn't sent
+        await deleteMFACode(normalizedEmail);
         result = { success: false, error: emailResult.error || 'Failed to send email' };
       }
     }
@@ -1181,33 +1371,49 @@ app.post('/api/auth/verify-mfa-code', async (req, res) => {
       return sendResponse(res, 400, 'failure', null, 'Missing required fields', 'Code and phone number or email are required');
     }
     
+    console.log(`[verify-mfa-code] Looking up code for identifier: "${identifier}"`);
+    console.log(`[verify-mfa-code] Email from request: "${email}", Phone: "${phoneNumber}"`);
+    console.log(`[verify-mfa-code] Identifier length: ${identifier.length}, Email length: ${email ? email.length : 0}`);
+    
     // Normalize code (remove non-digits, ensure 4 digits)
     const normalizedCode = code.toString().replace(/\D/g, '').padStart(4, '0').slice(0, 4);
     
-    const mfaData = mfaCodes.get(identifier);
+    const mfaData = await getMFACode(identifier);
     
     if (!mfaData) {
-      console.error(`MFA code not found for identifier: ${identifier}`);
-      console.error(`Available identifiers: ${Array.from(mfaCodes.keys()).join(', ')}`);
+      console.error(`[verify-mfa-code] MFA code not found for identifier: ${identifier}`);
+      console.error(`[verify-mfa-code] Request body:`, JSON.stringify({ email, phoneNumber, code: '****' }));
       return sendResponse(res, 401, 'failure', null, 'No verification code found', 'Please request a verification code first.');
     }
     
     if (mfaData.expiresAt < Date.now()) {
-      mfaCodes.delete(identifier);
+      await deleteMFACode(identifier);
       return sendResponse(res, 401, 'failure', null, 'Verification code expired', 'Please request a new verification code.');
     }
     
     // Normalize stored code for comparison
+    console.log(`[verify-mfa-code] Raw stored code: ${mfaData.code}, type: ${typeof mfaData.code}`);
+    console.log(`[verify-mfa-code] Raw received code: ${code}, type: ${typeof code}`);
+    
     const storedCode = mfaData.code.toString().replace(/\D/g, '').padStart(4, '0').slice(0, 4);
+    console.log(`[verify-mfa-code] Normalized stored code: "${storedCode}"`);
+    console.log(`[verify-mfa-code] Normalized received code: "${normalizedCode}"`);
     
     // Verify code - normalized comparison
     if (storedCode !== normalizedCode) {
-      console.error(`Code mismatch - stored: "${storedCode}", received: "${normalizedCode}"`);
-      return sendResponse(res, 401, 'failure', null, 'Invalid verification code', 'The code you entered is incorrect.');
+      console.error(`[verify-mfa-code] Code mismatch - stored: "${storedCode}", received: "${normalizedCode}"`);
+      console.error(`[verify-mfa-code] Stored code type: ${typeof storedCode}, Received code type: ${typeof normalizedCode}`);
+      console.error(`[verify-mfa-code] Stored code length: ${storedCode.length}, Received code length: ${normalizedCode.length}`);
+      console.error(`[verify-mfa-code] Stored code char codes: [${Array.from(storedCode).map(c => c.charCodeAt(0)).join(', ')}]`);
+      console.error(`[verify-mfa-code] Received code char codes: [${Array.from(normalizedCode).map(c => c.charCodeAt(0)).join(', ')}]`);
+      console.error(`[verify-mfa-code] JSON stored: ${JSON.stringify(storedCode)}, JSON received: ${JSON.stringify(normalizedCode)}`);
+      return sendResponse(res, 401, 'failure', null, 'Invalid verification code', `The code you entered is incorrect. Expected: ${storedCode}, Got: ${normalizedCode}`);
     }
     
+    console.log(`[verify-mfa-code] Code match confirmed: "${storedCode}" === "${normalizedCode}"`);
+    
     // Code verified, clean up
-    mfaCodes.delete(identifier);
+    await deleteMFACode(identifier);
     
     // Generate token - clientId is optional, default to email-based identifier
     const finalClientId = (clientId && clientId.trim()) || `web-${identifier.replace(/[^a-zA-Z0-9]/g, '-')}`;
