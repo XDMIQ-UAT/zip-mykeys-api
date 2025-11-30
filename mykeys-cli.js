@@ -29,6 +29,7 @@ const {
 // Configuration
 const MYKEYS_URL = process.env.MYKEYS_URL || 'https://mykeys.zip';
 const TOKEN_FILE = path.join(os.homedir(), '.mykeys', 'token');
+const EMAIL_FILE = path.join(os.homedir(), '.mykeys', 'email'); // Store email for session retrieval
 const SESSIONS_DIR = path.join(os.homedir(), '.mykeys', 'sessions');
 const HELD_SESSIONS_DIR = path.join(os.homedir(), '.mykeys', 'sessions', 'held');
 const HISTORY_DIR = path.join(os.homedir(), '.mykeys', 'sessions', 'history');
@@ -551,9 +552,38 @@ function colorize(text, color) {
 }
 
 /**
- * Load token from file or environment
+ * Save email to file
  */
-function getToken() {
+function saveEmail(email) {
+  try {
+    const emailDir = path.dirname(EMAIL_FILE);
+    if (!fs.existsSync(emailDir)) {
+      fs.mkdirSync(emailDir, { recursive: true });
+    }
+    fs.writeFileSync(EMAIL_FILE, email.trim().toLowerCase(), 'utf8');
+  } catch (error) {
+    // Ignore file write errors
+  }
+}
+
+/**
+ * Load email from file
+ */
+function getEmail() {
+  try {
+    if (fs.existsSync(EMAIL_FILE)) {
+      return fs.readFileSync(EMAIL_FILE, 'utf8').trim();
+    }
+  } catch (error) {
+    // Ignore file read errors
+  }
+  return null;
+}
+
+/**
+ * Load token from file or environment (synchronous)
+ */
+function getTokenSync() {
   // Try environment variable first
   if (process.env.MCP_TOKEN || process.env.MYKEYS_TOKEN) {
     return process.env.MCP_TOKEN || process.env.MYKEYS_TOKEN;
@@ -570,6 +600,166 @@ function getToken() {
   }
   
   return null;
+}
+
+/**
+ * Validate token by making a test request
+ */
+async function validateToken(token) {
+  try {
+    const response = await makeRequest(`${MYKEYS_URL}/api/admin/info`, {
+      method: 'GET',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+      },
+      timeout: 5000,
+    });
+    return response.status === 200;
+  } catch (error) {
+    return false;
+  }
+}
+
+/**
+ * Load token from file or environment, or auto-authenticate via email
+ */
+async function getToken() {
+  const token = getTokenSync();
+  
+  // If token exists, validate it
+  if (token) {
+    const isValid = await validateToken(token);
+    if (isValid) {
+      return token;
+    } else {
+      console.log(colorize('⚠️  Existing token is invalid or expired. Re-authenticating...', 'yellow'));
+      console.log('');
+      // Remove invalid token file
+      try {
+        if (fs.existsSync(TOKEN_FILE)) {
+          fs.unlinkSync(TOKEN_FILE);
+        }
+      } catch (error) {
+        // Ignore errors
+      }
+    }
+  }
+  
+  // No token found or token invalid - auto-authenticate via email
+  return await authenticateViaEmail();
+}
+
+/**
+ * Authenticate via email and generate token automatically
+ */
+async function authenticateViaEmail() {
+  console.log('');
+  console.log(colorize('╔════════════════════════════════════════╗', 'cyan'));
+  console.log(colorize('║', 'cyan') + colorize('     MyKeys Authentication', 'bright') + colorize('           ║', 'cyan'));
+  console.log(colorize('╚════════════════════════════════════════╝', 'cyan'));
+  console.log('');
+  console.log(colorize('No token found. Please authenticate via email:', 'yellow'));
+  console.log('');
+  
+  // Try to use saved email, or prompt for new one
+  let email = getEmail();
+  if (email) {
+    console.log(colorize(`Using saved email: ${email}`, 'dim'));
+    const useSaved = await prompt(colorize('Use this email? (Y/n): ', 'yellow'));
+    if (useSaved.toLowerCase() !== 'n' && useSaved.toLowerCase() !== 'no') {
+      // Use saved email
+    } else {
+      email = null;
+    }
+  }
+  
+  if (!email) {
+    email = await prompt(colorize('Enter your email address: ', 'yellow'));
+    if (!email) {
+      console.error(colorize('Error:', 'red'), 'Email is required');
+      process.exit(1);
+    }
+    
+    // Validate email
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      console.error(colorize('Error:', 'red'), 'Invalid email address format');
+      process.exit(1);
+    }
+    
+    // Save email for future use
+    saveEmail(email);
+  }
+  
+  email = email.trim().toLowerCase();
+  
+  try {
+    // Request 4-digit code
+    console.log('');
+    console.log(colorize('Sending 4-digit verification code to your email...', 'dim'));
+    const mfaResult = await requestMFACode(null, email);
+    console.log(colorize(`✓ 4-digit code sent to ${email}`, 'green'));
+    console.log('');
+    
+    // Prompt for code
+    const code = await prompt(colorize('Enter 4-digit verification code: ', 'yellow'));
+    if (!code || code.replace(/\D/g, '').length !== 4) {
+      console.error(colorize('Error:', 'red'), 'Please enter a valid 4-digit verification code');
+      process.exit(1);
+    }
+    
+    // Normalize code (remove non-digits, pad to 4)
+    const normalizedCode = code.replace(/\D/g, '').padStart(4, '0').slice(0, 4);
+    
+    // Generate client ID from hostname
+    const hostname = os.hostname().toLowerCase().replace(/[^a-z0-9]/g, '');
+    const clientId = `cli-${hostname}`;
+    
+    // Verify code and generate token
+    console.log('');
+    console.log(colorize('Verifying code and generating token...', 'dim'));
+    const tokenResult = await verifyMFACodeAndGenerateToken(
+      null,
+      email,
+      normalizedCode,
+      clientId,
+      'cli',
+      90 // 90 days expiration
+    );
+    
+    const token = tokenResult.token;
+    
+    // Save token
+    const tokenDir = path.dirname(TOKEN_FILE);
+    if (!fs.existsSync(tokenDir)) {
+      fs.mkdirSync(tokenDir, { recursive: true });
+    }
+    fs.writeFileSync(TOKEN_FILE, token, 'utf8');
+    
+    console.log(colorize('✓ Authenticated successfully', 'green'));
+    console.log(colorize(`✓ Token saved to: ${TOKEN_FILE}`, 'green'));
+    console.log('');
+    
+    return token;
+  } catch (error) {
+    console.error('');
+    console.error(colorize('Authentication failed:', 'red'), error.message);
+    
+    // Show more details if available
+    if (error.response && error.response.data) {
+      console.error(colorize('Error details:', 'yellow'), error.response.data.details || error.response.data.error || '');
+    }
+    
+    console.log('');
+    console.log('Troubleshooting:');
+    console.log('  1. Check that email address is correct');
+    console.log('  2. Check your email for the 4-digit code');
+    console.log('  3. Ensure code is entered within 10 minutes');
+    console.log('  4. Verify email service is configured');
+    console.log(`  5. API URL: ${MYKEYS_URL}`);
+    console.log(`  6. Check Vercel logs for detailed error: https://vercel.com/xdmiq/zip-myl-mykeys-api/logs`);
+    process.exit(1);
+  }
 }
 
 /**
@@ -775,7 +965,7 @@ function loadSession(seed, token = null) {
   
   // Try to get token if not provided
   if (!token) {
-    token = getToken();
+    token = getTokenSync();
   }
   
   // Load related tokens for partial decryption
@@ -827,6 +1017,51 @@ function loadSession(seed, token = null) {
 }
 
 /**
+ * Get last session seed by email
+ */
+function getLastSessionByEmail(email) {
+  ensureSessionsDir();
+  email = email.trim().toLowerCase();
+  
+  // Scan all session files to find the most recent one with matching email
+  let lastSession = null;
+  let lastModified = 0;
+  
+  try {
+    const sessionFiles = fs.readdirSync(SESSIONS_DIR);
+    for (const file of sessionFiles) {
+      if (file.endsWith('.json')) {
+        const sessionPath = path.join(SESSIONS_DIR, file);
+        try {
+          const data = fs.readFileSync(sessionPath, 'utf8');
+          const session = JSON.parse(data);
+          
+          // Check if session has email metadata
+          if (session.email && session.email.toLowerCase() === email) {
+            const stats = fs.statSync(sessionPath);
+            if (stats.mtimeMs > lastModified) {
+              lastModified = stats.mtimeMs;
+              lastSession = {
+                seed: file.replace('.json', ''),
+                session: session,
+                modified: stats.mtime,
+              };
+            }
+          }
+        } catch (error) {
+          // Skip invalid session files
+          continue;
+        }
+      }
+    }
+  } catch (error) {
+    // Directory might not exist or be empty
+  }
+  
+  return lastSession;
+}
+
+/**
  * Save session data (with encryption and diff tracking)
  */
 function saveSession(seed, sessionData, token = null) {
@@ -834,7 +1069,13 @@ function saveSession(seed, sessionData, token = null) {
   
   // Try to get token if not provided
   if (!token) {
-    token = getToken();
+    token = getTokenSync();
+  }
+  
+  // Store email in session metadata if available
+  const email = getEmail();
+  if (email && !sessionData.email) {
+    sessionData.email = email;
   }
   
   const sessionPath = getSessionPath(seed, false);
@@ -1104,14 +1345,32 @@ async function loadSessionFromServer(seed, token) {
  */
 async function promptForSeed() {
   ensureSessionsDir();
-  const token = getToken();
+  const token = await getToken();
+  
+  // Try to retrieve last session by email
+  const email = getEmail();
+  let lastSession = null;
+  if (email) {
+    lastSession = getLastSessionByEmail(email);
+  }
   
   console.log('');
   console.log(colorize('╔════════════════════════════════════════╗', 'cyan'));
   console.log(colorize('║', 'cyan') + colorize('     MyKeys Session Manager', 'bright') + colorize('          ║', 'cyan'));
   console.log(colorize('╚════════════════════════════════════════╝', 'cyan'));
   console.log('');
+  
+  if (lastSession) {
+    console.log(colorize(`Found last session for ${email}:`, 'green'));
+    console.log(colorize(`  Seed: ${lastSession.seed}`, 'dim'));
+    console.log(colorize(`  Modified: ${new Date(lastSession.modified).toLocaleString()}`, 'dim'));
+    console.log('');
+  }
+  
   console.log(colorize('Enter a session seed (identifier for this context/memory session):', 'bright'));
+  if (lastSession) {
+    console.log(colorize(`  • Press Enter to use last session: ${lastSession.seed}`, 'dim'));
+  }
   console.log(colorize('  • Use the same seed to resume a previous session', 'dim'));
   console.log(colorize('  • Use a new seed to start a fresh session', 'dim'));
   console.log(colorize('  • Sessions are encrypted and synced to server', 'dim'));
@@ -1120,6 +1379,10 @@ async function promptForSeed() {
   const seed = await prompt(colorize('Session seed: ', 'yellow'));
   
   if (!seed || seed.trim().length === 0) {
+    if (lastSession) {
+      console.log(colorize(`✓ Using last session: ${lastSession.seed}`, 'green'));
+      return lastSession.seed;
+    }
     console.log(colorize('⚠️  No seed provided. Using default session.', 'yellow'));
     return 'default';
   }
@@ -1226,7 +1489,7 @@ async function promptForSeed() {
  * Update session with new context/memory
  */
 function updateSession(seed, updates, token = null) {
-  if (!token) token = getToken();
+  if (!token) token = getTokenSync();
   const session = loadSession(seed, token);
   if (session) {
     Object.assign(session, updates);
@@ -1238,7 +1501,7 @@ function updateSession(seed, updates, token = null) {
  * Add memory entry to session
  */
 function addSessionMemory(seed, memoryEntry, token = null) {
-  if (!token) token = getToken();
+  if (!token) token = getTokenSync();
   const session = loadSession(seed, token);
   if (session) {
     if (!session.memory) {
@@ -1341,18 +1604,32 @@ function promptPassword(question) {
  */
 async function requestMFACode(phoneNumber, email) {
   try {
+    console.log(`[DEBUG] Requesting MFA code from: ${MYKEYS_URL}/api/auth/request-mfa-code`);
+    console.log(`[DEBUG] Email: ${email || 'N/A'}, Phone: ${phoneNumber || 'N/A'}`);
+    
     const response = await makeRequest(`${MYKEYS_URL}/api/auth/request-mfa-code`, {
       method: 'POST',
       body: { phoneNumber, email },
       timeout: 30000,
     });
     
-    if (response.status === 200 && response.data.success) {
+    console.log(`[DEBUG] Response status: ${response.status}`);
+    console.log(`[DEBUG] Response data:`, JSON.stringify(response.data, null, 2));
+    
+    // Handle standardized API response format: { status: 'success', ... }
+    if (response.status === 200 && (response.data.success || response.data.status === 'success')) {
       return response.data;
     } else {
-      throw new Error(response.data.error || 'Failed to request MFA code');
+      const errorMsg = response.data.error || response.data.message || response.data.details || 'Failed to request MFA code';
+      console.error(`[DEBUG] API Error: ${errorMsg}`);
+      throw new Error(errorMsg);
     }
   } catch (error) {
+    console.error(`[DEBUG] Request failed:`, error.message);
+    if (error.response) {
+      console.error(`[DEBUG] Response status: ${error.response.status}`);
+      console.error(`[DEBUG] Response data:`, JSON.stringify(error.response.data, null, 2));
+    }
     throw error;
   }
 }
@@ -1375,10 +1652,19 @@ async function verifyMFACodeAndGenerateToken(phoneNumber, email, code, clientId,
       timeout: 30000,
     });
     
-    if (response.status === 200 && response.data.success) {
+    // Handle standardized API response format: { status: 'success', data: { token: ... } }
+    if (response.status === 200 && (response.data.success || response.data.status === 'success')) {
+      // Handle both old format (data.success) and new format (data.status)
+      if (response.data.status === 'success' && response.data.data && response.data.data.token) {
+        return {
+          token: response.data.data.token,
+          expiresAt: response.data.data.expiresAt,
+          tokenId: response.data.data.tokenId,
+        };
+      }
       return response.data;
     } else {
-      throw new Error(response.data.error || 'Failed to verify MFA code');
+      throw new Error(response.data.error || response.data.message || 'Failed to verify MFA code');
     }
   } catch (error) {
     throw error;
@@ -1547,13 +1833,15 @@ async function generateTokenFlow() {
     
     // Update session with token generation info
     if (sessionSeed) {
-      const token = getToken();
-      addSessionMemory(sessionSeed, {
-        type: 'token_generated',
-        expiresAt: tokenResult.expiresAt,
-        clientId: clientId,
-        clientType: clientType,
-      }, token);
+      const token = getTokenSync();
+      if (token) {
+        addSessionMemory(sessionSeed, {
+          type: 'token_generated',
+          expiresAt: tokenResult.expiresAt,
+          clientId: clientId,
+          clientType: clientType,
+        }, token);
+      }
       updateSession(sessionSeed, {
         lastTokenGenerated: new Date().toISOString(),
       }, token);
@@ -1578,101 +1866,44 @@ async function generateTokenFlow() {
 }
 
 /**
+ * Get or create session seed based on email
+ */
+function getSessionSeedFromEmail() {
+  const email = getEmail();
+  if (!email) {
+    return 'default';
+  }
+  // Use email as seed (normalized)
+  return email.replace(/[^a-zA-Z0-9]/g, '-').toLowerCase();
+}
+
+/**
  * Main CLI function
  */
 async function main() {
   const args = process.argv.slice(2);
   const command = args[0];
   
-  // Prompt for seed at the start (unless --no-seed flag is used)
-  let sessionSeed = null;
-  if (!args.includes('--no-seed') && !args.includes('--skip-seed')) {
+  // Get token (will auto-authenticate via email if needed)
+  const token = await getToken();
+  
+  // Use email-based session seed
+  const sessionSeed = getSessionSeedFromEmail();
+  
+  // Update session with command info
+  if (token && sessionSeed) {
     try {
-      sessionSeed = await promptForSeed();
-      // Store seed in session for later use
-      if (sessionSeed) {
-        const token = getToken();
-        updateSession(sessionSeed, { 
-          lastCommand: command || 'help',
-          lastCommandTime: new Date().toISOString(),
-        }, token);
-      }
+      updateSession(sessionSeed, { 
+        lastCommand: command || 'help',
+        lastCommandTime: new Date().toISOString(),
+      }, token);
     } catch (error) {
-      console.error(colorize('Error managing session:', 'red'), error.message);
-      // Continue anyway
+      // Silently fail - session updates are optional
     }
   }
   
   if (command === 'admin') {
-    // Get token
-    let token = getToken();
-    
-    // If no token, offer email authentication
-    if (!token) {
-      console.log('');
-      console.log(colorize('╔════════════════════════════════════════╗', 'cyan'));
-      console.log(colorize('║', 'cyan') + colorize('     MyKeys Admin Authentication', 'bright') + colorize('     ║', 'cyan'));
-      console.log(colorize('╚════════════════════════════════════════╝', 'cyan'));
-      console.log('');
-      console.log(colorize('No token found. Authenticate via email:', 'yellow'));
-      console.log('');
-      
-      // Prompt for email
-      const email = await prompt(colorize('Enter your email address: ', 'yellow'));
-      if (!email) {
-        console.error(colorize('Error:', 'red'), 'Email is required');
-        process.exit(1);
-      }
-      
-      // Validate email
-      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-      if (!emailRegex.test(email)) {
-        console.error(colorize('Error:', 'red'), 'Invalid email address format');
-        process.exit(1);
-      }
-      
-      try {
-        // Request 4-digit code
-        console.log('');
-        console.log(colorize('Sending 4-digit verification code to your email...', 'dim'));
-        const mfaResult = await requestMFACode(null, email);
-        console.log(colorize(`✓ 4-digit code sent to ${email}`, 'green'));
-        console.log('');
-        
-        // Prompt for code
-        const code = await prompt(colorize('Enter 4-digit verification code: ', 'yellow'));
-        if (!code || code.length !== 4) {
-          console.error(colorize('Error:', 'red'), 'Please enter a 4-digit verification code');
-          process.exit(1);
-        }
-        
-        // Verify code and generate temporary token
-        console.log('');
-        console.log(colorize('Verifying code...', 'dim'));
-        const tokenResult = await verifyMFACodeAndGenerateToken(
-          null,
-          email,
-          code,
-          `admin-${Date.now()}`,
-          'admin-cli',
-          1 // 1 day expiration for admin session
-        );
-        
-        token = tokenResult.token;
-        console.log(colorize('✓ Authenticated successfully', 'green'));
-        console.log('');
-      } catch (error) {
-        console.error('');
-        console.error(colorize('Authentication failed:', 'red'), error.message);
-        console.log('');
-        console.log('Troubleshooting:');
-        console.log('  1. Check that email address is correct');
-        console.log('  2. Check your email for the 4-digit code');
-        console.log('  3. Ensure code is entered within 10 minutes');
-        console.log('  4. Verify ProtonMail SMTP is configured');
-        process.exit(1);
-      }
-    }
+    // Token already obtained in main() via getToken()
     
     // Get admin info
     try {
@@ -1682,11 +1913,13 @@ async function main() {
       
       // Update session with admin info
       if (sessionSeed) {
-        const token = getToken();
-        addSessionMemory(sessionSeed, {
-          type: 'admin_info',
-          data: info,
-        }, token);
+        const token = getTokenSync();
+        if (token) {
+          addSessionMemory(sessionSeed, {
+            type: 'admin_info',
+            data: info,
+          }, token);
+        }
         updateSession(sessionSeed, {
           lastAdminInfo: new Date().toISOString(),
         }, token);
@@ -1717,16 +1950,59 @@ async function main() {
       console.log('  3. Ensure you have network connectivity');
       process.exit(1);
     }
+  } else if (command === 'logout' || command === 'logoff') {
+    // Remove token file
+    let tokenRemoved = false;
+    let emailRemoved = false;
+    
+    try {
+      if (fs.existsSync(TOKEN_FILE)) {
+        fs.unlinkSync(TOKEN_FILE);
+        tokenRemoved = true;
+      }
+    } catch (error) {
+      console.error(colorize('Error removing token:', 'red'), error.message);
+    }
+    
+    // Optionally remove email (ask user)
+    if (fs.existsSync(EMAIL_FILE)) {
+      const removeEmail = await prompt(colorize('Also remove saved email? (y/N): ', 'yellow'));
+      if (removeEmail.toLowerCase() === 'y' || removeEmail.toLowerCase() === 'yes') {
+        try {
+          fs.unlinkSync(EMAIL_FILE);
+          emailRemoved = true;
+        } catch (error) {
+          console.error(colorize('Error removing email:', 'red'), error.message);
+        }
+      }
+    }
+    
+    console.log('');
+    if (tokenRemoved) {
+      console.log(colorize('✓ Logged out successfully', 'green'));
+      console.log(colorize(`✓ Token removed from: ${TOKEN_FILE}`, 'green'));
+    } else {
+      console.log(colorize('⚠️  No token found to remove', 'yellow'));
+    }
+    
+    if (emailRemoved) {
+      console.log(colorize(`✓ Email removed from: ${EMAIL_FILE}`, 'green'));
+    } else if (fs.existsSync(EMAIL_FILE)) {
+      console.log(colorize(`  Email kept: ${EMAIL_FILE}`, 'dim'));
+    }
+    console.log('');
+    console.log(colorize('You can now run any command to authenticate again.', 'dim'));
+    console.log('');
   } else if (command === 'generate-token') {
     await generateTokenFlow();
   } else if (command === 'session-history') {
     const seed = args[1] || sessionSeed;
     if (!seed) {
       console.error(colorize('Error:', 'red'), 'Session seed required');
-      console.log('Usage: mykeys session-history <seed>');
+      console.log('Usage: mykeys session-history [seed]');
+      console.log(colorize('  If seed not provided, uses email-based session', 'dim'));
       process.exit(1);
     }
-    const token = getToken();
     if (!token) {
       console.error(colorize('Error:', 'red'), 'Token required for encrypted session history');
       process.exit(1);
@@ -1737,10 +2013,10 @@ async function main() {
     const snapshotIndex = parseInt(args[2] || '0');
     if (!seed) {
       console.error(colorize('Error:', 'red'), 'Session seed required');
-      console.log('Usage: mykeys session-compare <seed> [snapshot-index]');
+      console.log('Usage: mykeys session-compare [seed] [snapshot-index]');
+      console.log(colorize('  If seed not provided, uses email-based session', 'dim'));
       process.exit(1);
     }
-    const token = getToken();
     if (!token) {
       console.error(colorize('Error:', 'red'), 'Token required for encrypted session comparison');
       process.exit(1);
@@ -1777,6 +2053,349 @@ async function main() {
       });
     }
     console.log('');
+  } else if (command === 'rings') {
+    // Ring management commands
+    const subcommand = process.argv[3];
+    
+    if (subcommand === 'list') {
+      const response = await makeRequest(`${MYKEYS_URL}/api/admin/rings`, {
+        method: 'GET',
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (response.status === 200 && response.data.status === 'success') {
+        const rings = response.data.data;
+        console.log(colorize('Rings:', 'bright'));
+        Object.entries(rings).forEach(([ringId, ring]) => {
+          console.log(`  ${colorize(ringId, 'cyan')}`);
+          console.log(`    First Email: ${ring.firstEmail}`);
+          console.log(`    Members: ${Object.keys(ring.members || {}).length}`);
+          console.log(`    Created: ${ring.createdAt}`);
+        });
+      } else {
+        console.error(colorize('Error:', 'red'), response.data?.error || response.data?.message || 'Failed to list rings');
+      }
+    } else if (subcommand === 'create') {
+      const ringId = process.argv[4];
+      const firstEmail = process.argv[5] || 'bcherrman@gmail.com';
+      if (!ringId) {
+        console.error('Usage: mykeys rings create <ringId> [firstEmail]');
+        process.exit(1);
+      }
+      const response = await makeRequest(`${MYKEYS_URL}/api/admin/rings`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}` },
+        body: {
+          ringId,
+          firstEmail,
+          initialRoles: { [firstEmail]: ['owner', 'architect', 'member'] }
+        }
+      });
+      if (response.status === 201 && response.data.status === 'success') {
+        console.log(colorize('Ring created:', 'green'), response.data.data.id);
+      } else {
+        console.error(colorize('Error:', 'red'), response.data?.error || response.data?.message || 'Failed to create ring');
+      }
+    } else if (subcommand === 'get') {
+      const ringId = process.argv[4];
+      if (!ringId) {
+        console.error('Usage: mykeys rings get <ringId>');
+        process.exit(1);
+      }
+      const response = await makeRequest(`${MYKEYS_URL}/api/admin/rings/${ringId}`, {
+        method: 'GET',
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (response.status === 200 && response.data.status === 'success') {
+        const ring = response.data.data;
+        console.log(colorize('Ring:', 'bright'), ring.id);
+        console.log(`  First Email: ${ring.firstEmail}`);
+        console.log(`  Created: ${ring.createdAt}`);
+        console.log(`  Members:`);
+        Object.entries(ring.members || {}).forEach(([email, data]) => {
+          console.log(`    ${email}: [${data.roles.join(', ')}]`);
+        });
+      } else {
+        console.error(colorize('Error:', 'red'), response.data?.error || response.data?.message || 'Failed to get ring');
+      }
+    } else if (subcommand === 'discover') {
+      const response = await makeRequest(`${MYKEYS_URL}/api/rings/discover`, {
+        method: 'GET',
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (response.status === 200 && response.data.status === 'success') {
+        const rings = response.data.data;
+        console.log(colorize('Discovered Rings:', 'bright'));
+        Object.entries(rings).forEach(([ringId, metadata]) => {
+          console.log(`  ${colorize(ringId, 'cyan')}`);
+          if (metadata.publicName) console.log(`    Name: ${metadata.publicName}`);
+          if (metadata.capabilities) console.log(`    Capabilities: ${metadata.capabilities.join(', ')}`);
+        });
+      } else {
+        console.error(colorize('Error:', 'red'), response.data?.error || response.data?.message || 'Failed to discover rings');
+      }
+    } else if (subcommand === 'my-ring') {
+      const response = await makeRequest(`${MYKEYS_URL}/api/rings/my-ring`, {
+        method: 'GET',
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (response.status === 200 && response.data.status === 'success') {
+        const data = response.data.data;
+        console.log(colorize('Your Ring:', 'bright'), data.ringId);
+        if (data.ring) {
+          console.log(`  First Email: ${data.ring.firstEmail}`);
+          console.log(`  Members: ${Object.keys(data.ring.members || {}).length}`);
+        }
+      } else {
+        console.error(colorize('Error:', 'red'), response.data?.error || response.data?.message || 'Failed to get ring');
+      }
+    } else {
+      console.log('Ring Management Commands:');
+      console.log(`  ${colorize('mykeys rings list', 'cyan')}           - List all rings`);
+      console.log(`  ${colorize('mykeys rings create <ringId>', 'cyan')} - Create new ring`);
+      console.log(`  ${colorize('mykeys rings get <ringId>', 'cyan')}    - Get ring details`);
+      console.log(`  ${colorize('mykeys rings discover', 'cyan')}       - Discover rings`);
+      console.log(`  ${colorize('mykeys rings my-ring', 'cyan')}        - Get your ring`);
+    }
+  } else if (command === 'keys') {
+    // Key management commands
+    const subcommand = process.argv[3];
+    
+    if (subcommand === 'list') {
+      const ringId = process.argv[4];
+      if (!ringId) {
+        console.error('Usage: mykeys keys list <ringId>');
+        process.exit(1);
+      }
+      const response = await makeRequest(`${MYKEYS_URL}/api/rings/${ringId}/keys`, {
+        method: 'GET',
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (response.status === 200 && response.data.status === 'success') {
+        console.log(colorize(`Keys in ${ringId}:`, 'bright'));
+        response.data.data.keys.forEach(key => {
+          console.log(`  ${colorize(key, 'cyan')}`);
+        });
+        console.log(`\nTotal: ${response.data.data.count}`);
+      } else {
+        console.error(colorize('Error:', 'red'), response.data?.error || response.data?.message || 'Failed to list keys');
+      }
+    } else if (subcommand === 'get') {
+      const ringId = process.argv[4];
+      const keyName = process.argv[5];
+      const ecosystem = process.argv[6] || 'default';
+      if (!ringId || !keyName) {
+        console.error('Usage: mykeys keys get <ringId> <keyName> [ecosystem]');
+        process.exit(1);
+      }
+      const response = await makeRequest(`${MYKEYS_URL}/api/v1/secrets/${ecosystem}/${keyName}`, {
+        method: 'GET',
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (response.status === 200 && response.data.success) {
+        console.log(colorize('Key Value:', 'bright'));
+        console.log(response.data.secret_value);
+      } else {
+        console.error(colorize('Error:', 'red'), response.data?.error || 'Failed to get key');
+      }
+    } else if (subcommand === 'set') {
+      const ringId = process.argv[4];
+      const keyName = process.argv[5];
+      const value = process.argv[6];
+      const ecosystem = process.argv[7] || 'default';
+      if (!ringId || !keyName || !value) {
+        console.error('Usage: mykeys keys set <ringId> <keyName> <value> [ecosystem]');
+        process.exit(1);
+      }
+      const response = await makeRequest(`${MYKEYS_URL}/api/v1/secrets/${ecosystem}`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}` },
+        body: {
+          secret_name: keyName,
+          secret_value: value
+        }
+      });
+      if (response.status === 200 && response.data.success) {
+        console.log(colorize('Key stored:', 'green'), keyName);
+      } else {
+        console.error(colorize('Error:', 'red'), response.data?.error || 'Failed to store key');
+      }
+    } else {
+      console.log('Key Management Commands:');
+      console.log(`  ${colorize('mykeys keys list <ringId>', 'cyan')}        - List keys in ring`);
+      console.log(`  ${colorize('mykeys keys get <ringId> <keyName>', 'cyan')} - Get key value`);
+      console.log(`  ${colorize('mykeys keys set <ringId> <keyName> <value>', 'cyan')} - Set key value`);
+    }
+  } else if (command === 'vault') {
+    // Privacy vault commands
+    const subcommand = process.argv[3];
+    
+    if (subcommand === 'store') {
+      const ringId = process.argv[4];
+      const keyName = process.argv[5];
+      const vaultSecretName = process.argv[6];
+      const value = process.argv[7];
+      if (!ringId || !keyName || !vaultSecretName || !value) {
+        console.error('Usage: mykeys vault store <ringId> <keyName> <vaultSecretName> <value>');
+        process.exit(1);
+      }
+      const response = await makeRequest(`${MYKEYS_URL}/api/rings/${ringId}/keys/${keyName}/vault`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}` },
+        body: {
+          vault_secret_name: vaultSecretName,
+          vault_secret_value: value
+        }
+      });
+      if (response.status === 200 && response.data.status === 'success') {
+        console.log(colorize('Vault secret stored:', 'green'), vaultSecretName);
+      } else {
+        console.error(colorize('Error:', 'red'), response.data?.error || response.data?.message || 'Failed to store vault secret');
+      }
+    } else if (subcommand === 'get') {
+      const ringId = process.argv[4];
+      const keyName = process.argv[5];
+      const vaultSecretName = process.argv[6];
+      if (!ringId || !keyName || !vaultSecretName) {
+        console.error('Usage: mykeys vault get <ringId> <keyName> <vaultSecretName>');
+        process.exit(1);
+      }
+      const response = await makeRequest(`${MYKEYS_URL}/api/rings/${ringId}/keys/${keyName}/vault/${vaultSecretName}`, {
+        method: 'GET',
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (response.status === 200 && response.data.status === 'success') {
+        console.log(colorize('Vault Secret:', 'bright'));
+        console.log(response.data.data.vaultSecretValue);
+      } else {
+        console.error(colorize('Error:', 'red'), response.data?.error || response.data?.message || 'Failed to get vault secret');
+      }
+    } else if (subcommand === 'list') {
+      const ringId = process.argv[4];
+      const keyName = process.argv[5];
+      if (!ringId || !keyName) {
+        console.error('Usage: mykeys vault list <ringId> <keyName>');
+        process.exit(1);
+      }
+      const response = await makeRequest(`${MYKEYS_URL}/api/rings/${ringId}/keys/${keyName}/vault`, {
+        method: 'GET',
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (response.status === 200 && response.data.status === 'success') {
+        console.log(colorize('Vault Secrets:', 'bright'));
+        response.data.data.vaultSecrets.forEach(secret => {
+          console.log(`  ${colorize(secret, 'cyan')}`);
+        });
+      } else {
+        console.error(colorize('Error:', 'red'), response.data?.error || response.data?.message || 'Failed to list vault secrets');
+      }
+    } else {
+      console.log('Privacy Vault Commands:');
+      console.log(`  ${colorize('mykeys vault store <ringId> <keyName> <vaultSecretName> <value>', 'cyan')} - Store vault secret`);
+      console.log(`  ${colorize('mykeys vault get <ringId> <keyName> <vaultSecretName>', 'cyan')} - Get vault secret`);
+      console.log(`  ${colorize('mykeys vault list <ringId> <keyName>', 'cyan')} - List vault secrets`);
+    }
+  } else if (command === 'mcp') {
+    // MCP server management
+    const subcommand = process.argv[3];
+    
+    if (subcommand === 'update') {
+      const { execSync } = require('child_process');
+      const updateScript = path.join(__dirname, 'scripts', 'mcp-update.js');
+      const force = process.argv.includes('--force');
+      
+      try {
+        console.log('🔄 Updating MCP server...\n');
+        execSync(`node "${updateScript}" ${force ? '--force' : ''}`, {
+          stdio: 'inherit',
+          cwd: __dirname
+        });
+      } catch (error) {
+        console.error(colorize('Error updating MCP server:', 'red'), error.message);
+        process.exit(1);
+      }
+    } else if (subcommand === 'check') {
+      try {
+        const response = await makeRequest(`${MYKEYS_URL}/api/mcp/version`, {
+          method: 'GET',
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (response.status === 200) {
+          const info = response.data;
+          console.log(colorize('MCP Server Version Info:', 'bright'));
+          console.log(`  Current Version: ${info.version || 'unknown'}`);
+          console.log(`  Download URL: ${info.downloadUrl || 'N/A'}`);
+          console.log(`\n💡 Run ${colorize('mykeys mcp update', 'cyan')} to update to the latest version.`);
+        }
+      } catch (error) {
+        console.error(colorize('Error checking version:', 'red'), error.message);
+      }
+    } else {
+      console.log('MCP Server Management:');
+      console.log(`  ${colorize('mykeys mcp update', 'cyan')}      - Update MCP server to latest version`);
+      console.log(`  ${colorize('mykeys mcp check', 'cyan')}      - Check for updates`);
+    }
+  } else if (command === 'secrets') {
+    // Secret management commands
+    const subcommand = process.argv[3];
+    
+    if (subcommand === 'list') {
+      const ecosystem = process.argv[4] || 'default';
+      const response = await makeRequest(`${MYKEYS_URL}/api/v1/secrets/${ecosystem}`, {
+        method: 'GET',
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (response.status === 200 && response.data.success) {
+        console.log(colorize(`Secrets in ${ecosystem}:`, 'bright'));
+        response.data.secrets.forEach(secret => {
+          console.log(`  ${colorize(secret.secret_name, 'cyan')}`);
+        });
+      } else {
+        console.error(colorize('Error:', 'red'), response.data?.error || 'Failed to list secrets');
+      }
+    } else if (subcommand === 'get') {
+      const ecosystem = process.argv[4];
+      const secretName = process.argv[5];
+      if (!ecosystem || !secretName) {
+        console.error('Usage: mykeys secrets get <ecosystem> <secretName>');
+        process.exit(1);
+      }
+      const response = await makeRequest(`${MYKEYS_URL}/api/v1/secrets/${ecosystem}/${secretName}`, {
+        method: 'GET',
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (response.status === 200 && response.data.success) {
+        console.log(colorize('Secret Value:', 'bright'));
+        console.log(response.data.secret_value);
+      } else {
+        console.error(colorize('Error:', 'red'), response.data?.error || 'Failed to get secret');
+      }
+    } else if (subcommand === 'set') {
+      const ecosystem = process.argv[4];
+      const secretName = process.argv[5];
+      const value = process.argv[6];
+      if (!ecosystem || !secretName || !value) {
+        console.error('Usage: mykeys secrets set <ecosystem> <secretName> <value>');
+        process.exit(1);
+      }
+      const response = await makeRequest(`${MYKEYS_URL}/api/v1/secrets/${ecosystem}`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}` },
+        body: {
+          secret_name: secretName,
+          secret_value: value
+        }
+      });
+      if (response.status === 200 && response.data.success) {
+        console.log(colorize('Secret stored:', 'green'), secretName);
+      } else {
+        console.error(colorize('Error:', 'red'), response.data?.error || 'Failed to store secret');
+      }
+    } else {
+      console.log('Secret Management Commands:');
+      console.log(`  ${colorize('mykeys secrets list [ecosystem]', 'cyan')} - List secrets`);
+      console.log(`  ${colorize('mykeys secrets get <ecosystem> <secretName>', 'cyan')} - Get secret`);
+      console.log(`  ${colorize('mykeys secrets set <ecosystem> <secretName> <value>', 'cyan')} - Set secret`);
+    }
   } else if (command === 'related-tokens') {
     const subcommand = args[1];
     
@@ -1799,7 +2418,7 @@ async function main() {
         console.log(colorize('✓ Added related token', 'green'));
         
         // Check if it's actually related
-        const currentToken = getToken();
+        const currentToken = getTokenSync();
         if (currentToken && areKeysRelated(currentToken, tokenToAdd)) {
           console.log(colorize('✓ Token is related to current key chain', 'green'));
         } else {
@@ -1810,7 +2429,7 @@ async function main() {
       }
     } else if (subcommand === 'list') {
       const relatedTokens = loadRelatedTokens();
-      const currentToken = getToken();
+      const currentToken = getTokenSync();
       
       console.log('');
       console.log(colorize('Related Tokens:', 'bright'));
@@ -1868,14 +2487,40 @@ async function main() {
     console.log('Usage:');
     console.log(`  ${colorize('mykeys admin', 'cyan')}              - Show admin information`);
     console.log(`  ${colorize('mykeys generate-token', 'cyan')}     - Generate a new MCP token with MFA`);
+    console.log(`  ${colorize('mykeys logout', 'cyan')}             - Remove saved token and logout`);
     console.log(`  ${colorize('mykeys session-history <seed>', 'cyan')} - Replay session history`);
     console.log(`  ${colorize('mykeys session-compare <seed> [index]', 'cyan')} - Compare current vs historical state`);
     console.log(`  ${colorize('mykeys related-tokens', 'cyan')}      - Manage related tokens for partial decryption`);
     console.log('');
+    console.log('Ring Management:');
+    console.log(`  ${colorize('mykeys rings list', 'cyan')}           - List all rings`);
+    console.log(`  ${colorize('mykeys rings create <ringId>', 'cyan')} - Create new ring`);
+    console.log(`  ${colorize('mykeys rings get <ringId>', 'cyan')}    - Get ring details`);
+    console.log(`  ${colorize('mykeys rings discover', 'cyan')}       - Discover rings`);
+    console.log(`  ${colorize('mykeys rings my-ring', 'cyan')}        - Get your ring`);
+    console.log('');
+    console.log('Key Management:');
+    console.log(`  ${colorize('mykeys keys list <ringId>', 'cyan')}        - List keys in ring`);
+    console.log(`  ${colorize('mykeys keys get <ringId> <keyName>', 'cyan')} - Get key value`);
+    console.log(`  ${colorize('mykeys keys set <ringId> <keyName> <value>', 'cyan')} - Set key value`);
+    console.log('');
+    console.log('Privacy Vault:');
+    console.log(`  ${colorize('mykeys vault store <ringId> <keyName> <vaultSecretName> <value>', 'cyan')} - Store vault secret`);
+    console.log(`  ${colorize('mykeys vault get <ringId> <keyName> <vaultSecretName>', 'cyan')} - Get vault secret`);
+    console.log(`  ${colorize('mykeys vault list <ringId> <keyName>', 'cyan')} - List vault secrets`);
+    console.log('');
+    console.log('Secret Management:');
+    console.log(`  ${colorize('mykeys secrets list [ecosystem]', 'cyan')} - List secrets`);
+    console.log(`  ${colorize('mykeys secrets get <ecosystem> <secretName>', 'cyan')} - Get secret`);
+    console.log(`  ${colorize('mykeys secrets set <ecosystem> <secretName> <value>', 'cyan')} - Set secret`);
+    console.log('');
+    console.log('MCP Server Management:');
+    console.log(`  ${colorize('mykeys mcp update', 'cyan')}      - Update MCP server to latest version`);
+    console.log(`  ${colorize('mykeys mcp check', 'cyan')}      - Check for updates`);
+    console.log('');
     console.log('Session Management:');
-    console.log(`  ${colorize('--no-seed', 'dim')} or ${colorize('--skip-seed', 'dim')}  - Skip seed prompt`);
+    console.log(`  Sessions are automatically managed by email`);
     console.log(`  Sessions stored in: ${SESSIONS_DIR}`);
-    console.log(`  Held sessions: ${HELD_SESSIONS_DIR}`);
     console.log(`  History: ${HISTORY_DIR}`);
     console.log(`  Diffs: ${DIFFS_DIR}`);
     console.log(colorize('  • Sessions are encrypted and synced to server', 'dim'));
