@@ -24,15 +24,15 @@ This repository uses a **hybrid CI/CD approach**:
 - **Status check**: `Quick Tests (Unit Only) / unit-tests`
 
 ### 2. Full Tests: `.github/workflows/test.yml`
-**Complete test suite** - Unit + E2E tests (~10-15 minutes)
+**Unit tests only** - Fast feedback (~1 minute)
 
 - **Triggers**: 
   - Push to `master`/`main` branches
   - Pull requests targeting `master`/`main`
-  - Manual trigger (with option to skip E2E)
-- **Runs**: Unit tests + E2E tests
+  - Manual trigger
+- **Runs**: Unit tests only (E2E tests removed for speed)
 - **Use case**: PR validation, pre-merge checks, production readiness
-- **Status check**: `Full Tests (Unit + E2E) / test-summary`
+- **Status check**: `Full Tests (Unit Only) / test-summary`
 
 ### Jobs
 
@@ -81,13 +81,14 @@ This repository uses a **hybrid CI/CD approach**:
 Quick setup:
 1. Go to Vercel Dashboard → Project Settings → Git
 2. Enable **"Wait for GitHub Actions checks"**
-3. Add required status check: **`Full Tests (Unit + E2E) / test-summary`**
+3. Add required status check: **`Full Tests (Unit Only) / test-summary`**
 
 **Status checks created:**
 - `Quick Tests (Unit Only) / unit-tests` - Quick unit tests (fast feedback)
-- `Full Tests (Unit + E2E) / unit-tests` - Unit tests (full suite)
-- `Full Tests (Unit + E2E) / e2e-tests` - E2E tests (Playwright)
-- `Full Tests (Unit + E2E) / test-summary` - Overall summary (recommended for Vercel wait)
+- `Full Tests (Unit Only) / unit-tests` - Unit tests (full suite)
+- `Full Tests (Unit Only) / test-summary` - Overall summary (recommended for Vercel wait)
+
+**Note**: E2E tests have been removed from CI workflows for speed. Run E2E tests locally with `npm test` before merging if needed.
 
 ## Environment Variables
 

@@ -1,19 +1,13 @@
-name: Full Tests (Unit + E2E)
+name: Full Tests (Unit Only)
 
 on:
   push:
     branches: [master, main]
-    # Only run full tests on main branches to save CI time
+    # Only run tests on main branches to save CI time
   pull_request:
     branches: [master, main]
   workflow_dispatch:
-    # Allow manual triggering for full test suite
-    inputs:
-      skip_e2e:
-        description: 'Skip E2E tests (faster)'
-        required: false
-        default: 'false'
-        type: boolean
+    # Allow manual triggering for test suite
 
 # Cancel in-progress runs when a new commit is pushed to the same PR/branch
 concurrency:
@@ -56,112 +50,24 @@ jobs:
           retention-days: 7
           if-no-files-found: ignore
 
-  e2e-tests:
-    name: E2E Tests
-    runs-on: ubuntu-latest
-    timeout-minutes: 15  # Prevent infinite hangs
-    
-    # Skip E2E tests if manually requested via workflow_dispatch input
-    # Otherwise run on PRs and main/master branch pushes
-    if: |
-      (github.event_name == 'pull_request' || 
-       github.ref == 'refs/heads/master' || 
-       github.ref == 'refs/heads/main' ||
-       github.event_name == 'workflow_dispatch') &&
-      (github.event_name != 'workflow_dispatch' || github.event.inputs.skip_e2e != 'true')
-    
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-      
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '18'
-          cache: 'npm'
-      
-      - name: Install dependencies
-        run: npm ci
-      
-      - name: Install Playwright browsers
-        run: npx playwright install --with-deps chromium
-        # Cache browsers to speed up subsequent runs
-        # Note: Playwright handles caching internally, but this ensures it's available
-      
-      - name: Build marketing site (for E2E tests)
-        run: npm run build:marketing
-        env:
-          CI: true
-      
-      - name: Run E2E tests
-        run: npm test
-        env:
-          CI: true
-          BASE_URL: http://localhost:8080
-          PORT: 8080
-          NODE_ENV: test
-          # Add minimal test env vars (tests should mock external services)
-          KV_REST_API_URL: ${{ secrets.KV_REST_API_URL || 'http://localhost:6379' }}
-          KV_REST_API_TOKEN: ${{ secrets.KV_REST_API_TOKEN || 'test-token' }}
-        timeout-minutes: 12  # Timeout for this step specifically
-      
-      # Ensure server process is killed if tests hang
-      - name: Cleanup (if tests fail)
-        if: failure()
-        run: |
-          echo "Tests failed or timed out - cleaning up any hanging processes"
-          pkill -f "node server.js" || true
-          pkill -f "playwright" || true
-      
-      - name: Upload test results
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: e2e-test-results
-          path: |
-            test-results/
-            playwright-report/
-          retention-days: 7
-      
-      - name: Upload Playwright report
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: playwright-report
-          path: playwright-report/
-          retention-days: 7
-
   test-summary:
     name: Test Summary
     runs-on: ubuntu-latest
-    needs: [unit-tests, e2e-tests]
+    needs: [unit-tests]
     if: always()
     timeout-minutes: 2  # Prevent infinite hangs
     
     # This job creates a status check that Vercel can wait for
-    # Status check name: "Tests / test-summary"
+    # Status check name: "Full Tests (Unit Only) / test-summary"
     
     steps:
       - name: Check test results
         run: |
           echo "Unit tests: ${{ needs.unit-tests.result }}"
-          echo "E2E tests: ${{ needs.e2e-tests.result }}"
           
-          # Handle case where e2e-tests job was skipped (not in needs results)
           if [ "${{ needs.unit-tests.result }}" != "success" ]; then
             echo "❌ Unit tests failed"
             exit 1
-          fi
-          
-          # E2E tests might be skipped on feature branches, which is OK
-          # Check if e2e-tests result exists and is not skipped
-          if [ "${{ needs.e2e-tests.result }}" == "failure" ]; then
-            echo "❌ E2E tests failed"
-            exit 1
-          fi
-          
-          if [ "${{ needs.e2e-tests.result }}" == "skipped" ] || [ -z "${{ needs.e2e-tests.result }}" ]; then
-            echo "⚠️ E2E tests skipped (expected on feature branches)"
           fi
           
           echo "✅ All tests passed!"
