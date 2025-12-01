@@ -8,7 +8,7 @@
  * - Content is isolated between rings (no cross-ring access)
  */
 
-const { getKV } = require('./server');
+const { getKV } = require('./kv-utils');
 const { getRing, getRingForEmail } = require('./ring-management');
 const { getSecret, storeSecret } = require('./server');
 

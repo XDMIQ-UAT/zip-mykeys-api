@@ -8,7 +8,7 @@
  */
 
 const crypto = require('crypto');
-const { getKV } = require('./server');
+const { getKV } = require('./kv-utils');
 const { getRing } = require('./ring-management');
 
 const ALGORITHM = 'aes-256-gcm';
