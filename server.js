@@ -4360,6 +4360,23 @@ try {
   console.warn('[server] Continuing without modular routes...');
 }
 
+// Serve specific static HTML files before catch-all
+app.get('/tools', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'tools.html'));
+});
+
+app.get('/tools.html', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'tools.html'));
+});
+
+app.get('/cli.html', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'cli.html'));
+});
+
+app.get('/cli-overview.html', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'cli-overview.html'));
+});
+
 // Serve static files (including React Router app)
 app.use(express.static(path.join(__dirname, 'public'), {
   index: 'index.html',
@@ -4374,6 +4391,10 @@ app.get('*', (req, res, next) => {
       req.path.startsWith('/generate-token') ||
       req.path.startsWith('/rebuild') ||
       req.path === '/role-management.html' ||
+      req.path === '/tools' ||
+      req.path === '/tools.html' ||
+      req.path === '/cli.html' ||
+      req.path === '/cli-overview.html' ||
       req.path.endsWith('.html')) {
     return next();
   }
