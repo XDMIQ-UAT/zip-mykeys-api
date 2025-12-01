@@ -387,11 +387,12 @@ app.get('/mcp-config-generator-v2.html', (req, res) => {
   res.setHeader('X-Deployment-Verification', 'v2.2.0-FORCE-UPDATE');
   const fs = require('fs');
   
-  // Try multiple possible file paths
+  // Try multiple possible file paths - use the new v2 filename
   const possiblePaths = [
-    path.join(__dirname, 'public', 'mcp-config-generator.html'),
-    path.join(process.cwd(), 'public', 'mcp-config-generator.html'),
-    path.join(__dirname, 'mcp-config-generator.html'),
+    path.join(__dirname, 'public', 'mcp-config-generator-v2.html'),
+    path.join(process.cwd(), 'public', 'mcp-config-generator-v2.html'),
+    path.join(__dirname, 'public', 'mcp-config-generator.html'), // fallback
+    path.join(__dirname, 'mcp-config-generator-v2.html'),
   ];
   
   let filePath = null;
