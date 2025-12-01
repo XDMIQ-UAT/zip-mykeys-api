@@ -10,8 +10,9 @@ const mockStorage = {
 };
 
 // Mock all dependencies
-jest.mock('../kv-utils', () => ({
-  getStorage: jest.fn(() => mockStorage)
+jest.mock('../../kv-utils', () => ({
+  getStorage: jest.fn(() => mockStorage),
+  getKV: jest.fn(() => mockStorage) // Backward compatibility
 }));
 
 jest.mock('../ring-registry', () => ({
