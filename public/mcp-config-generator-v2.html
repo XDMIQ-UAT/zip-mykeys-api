@@ -701,9 +701,12 @@
             
             <div class="result-box" id="configResult" style="display: none;">
                 <h3>✅ Configuration Generated</h3>
-                <p>Copy this JSON and paste it into your Cursor MCP settings:</p>
+                <p><strong>Copy the JSON below</strong> and paste it into your app's "Add MCP Server" interface:</p>
                 <div class="json-output" id="configOutput"></div>
-                <button class="copy-btn" onclick="copyConfig(event)">Copy Configuration</button>
+                <button class="copy-btn" onclick="copyConfig(event)">Copy Server JSON</button>
+                <p style="margin-top: 10px; font-size: 12px; color: #666;">
+                    💡 The "Copy Server JSON" button copies just the server configuration (without comments) that you can paste directly into your app's MCP server interface.
+                </p>
             </div>
         </div>
         
