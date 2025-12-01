@@ -317,9 +317,33 @@ async function getRingForUser(email = null, createAnonymous = true) {
     if (ringId) {
       return ringId;
     }
+    
+    // If email provided but no ring exists, create a proper ring for this user
+    if (createAnonymous) {
+      try {
+        const { createRing } = require('./ring-management');
+        const userRingId = `ring-${email.replace(/[^a-z0-9]/g, '-')}-${Date.now()}`;
+        const ring = await createRing(userRingId, email, {
+          [email]: ['admin'] // User is admin of their own ring
+        });
+        
+        // Register in registry
+        await registerRing(userRingId, {
+          publicName: email.split('@')[0], // Use username part as public name
+          capabilities: ['key-management', 'token-management'],
+        });
+        
+        return ring.id;
+      } catch (error) {
+        console.error('[ring-registry] Error creating ring for user:', error);
+        // Fallback to anonymous ring if creation fails
+        const anonRing = await createAnonymousRing();
+        return anonRing.id;
+      }
+    }
   }
   
-  // For anonymous usage, create temporary ring
+  // For anonymous usage (no email), create temporary ring
   if (createAnonymous) {
     const anonRing = await createAnonymousRing();
     return anonRing.id;
