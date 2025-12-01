@@ -1134,6 +1134,8 @@
             setupServerPathListener();
             updateWorkflowIndicator('config'); // Start with config tab (unified flow)
             setupTokenFormListeners(); // Setup token form listeners
+            setupConfigForm(); // Setup config form listener
+            restoreFormState(); // Restore form state if available
         }
         
         if (document.readyState === 'loading') {
