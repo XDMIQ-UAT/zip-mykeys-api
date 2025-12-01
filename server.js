@@ -373,21 +373,27 @@ app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
-// Serve the main file - now with updated content
+// Redirect original to v2 (v2 works, original is cached)
 app.get('/mcp-config-generator.html', (req, res) => {
+  res.redirect(301, '/mcp-config-generator-v2.html');
+});
+
+// Serve v2 file - this works because it's not cached
+app.get('/mcp-config-generator-v2.html', (req, res) => {
   // Set cache headers to prevent stale content
   res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
   res.setHeader('Pragma', 'no-cache');
   res.setHeader('Expires', '0');
-  res.setHeader('X-Deployment-Verification', 'v2.4.0-CACHE-BUST');
+  res.setHeader('X-Deployment-Verification', 'v2.4.0-V2-WORKS');
   res.setHeader('ETag', `"${Date.now()}"`); // Force new ETag on every request
   const fs = require('fs');
   
-  // Try multiple possible file paths
+  // Try multiple possible file paths - use v2 filename
   const possiblePaths = [
-    path.join(__dirname, 'public', 'mcp-config-generator.html'),
-    path.join(process.cwd(), 'public', 'mcp-config-generator.html'),
-    path.join(__dirname, 'mcp-config-generator.html'),
+    path.join(__dirname, 'public', 'mcp-config-generator-v2.html'),
+    path.join(process.cwd(), 'public', 'mcp-config-generator-v2.html'),
+    path.join(__dirname, 'public', 'mcp-config-generator.html'), // fallback
+    path.join(__dirname, 'mcp-config-generator-v2.html'),
   ];
   
   let filePath = null;
@@ -400,15 +406,13 @@ app.get('/mcp-config-generator.html', (req, res) => {
       try {
         fileContent = fs.readFileSync(testPath, 'utf8');
         const stats = fs.statSync(testPath);
-        const hasDeploymentLog = fileContent.includes('FORCE UPDATE TEST');
-        console.log('[mcp-config-generator] File found at:', testPath);
-        console.log('[mcp-config-generator] File size:', stats.size, 'bytes');
-        console.log('[mcp-config-generator] Has FORCE UPDATE log:', hasDeploymentLog);
-        console.log('[mcp-config-generator] __dirname:', __dirname);
-        console.log('[mcp-config-generator] process.cwd():', process.cwd());
+        const hasDeploymentLog = fileContent.includes('CACHE BUST') || fileContent.includes('V2 FILE');
+        console.log('[mcp-config-generator-v2] File found at:', testPath);
+        console.log('[mcp-config-generator-v2] File size:', stats.size, 'bytes');
+        console.log('[mcp-config-generator-v2] Has deployment log:', hasDeploymentLog);
         break;
       } catch (err) {
-        console.error('[mcp-config-generator] Error reading from', testPath, ':', err.message);
+        console.error('[mcp-config-generator-v2] Error reading from', testPath, ':', err.message);
       }
     }
   }
@@ -418,22 +422,17 @@ app.get('/mcp-config-generator.html', (req, res) => {
     res.setHeader('Content-Type', 'text/html; charset=utf-8');
     res.send(fileContent);
   } else {
-    console.error('[mcp-config-generator] File NOT FOUND in any location');
-    console.error('[mcp-config-generator] Tried paths:', possiblePaths);
+    console.error('[mcp-config-generator-v2] File NOT FOUND in any location');
+    console.error('[mcp-config-generator-v2] Tried paths:', possiblePaths);
     // Fallback: try express.static or send 404
-    const fallbackPath = path.join(__dirname, 'public', 'mcp-config-generator.html');
+    const fallbackPath = path.join(__dirname, 'public', 'mcp-config-generator-v2.html');
     res.sendFile(fallbackPath, (err) => {
       if (err) {
-        console.error('[mcp-config-generator] Fallback sendFile also failed:', err);
+        console.error('[mcp-config-generator-v2] Fallback sendFile also failed:', err);
         res.status(404).send('File not found. Check server logs for details.');
       }
     });
   }
-});
-
-// Keep v2 route for backward compatibility - redirect to original
-app.get('/mcp-config-generator-v2.html', (req, res) => {
-  res.redirect(301, '/mcp-config-generator.html');
 });
 
 app.get('/generate-token.html', (req, res) => {
