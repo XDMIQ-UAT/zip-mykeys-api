@@ -4180,16 +4180,24 @@ app.post('/api/cli/execute', authenticate, async (req, res) => {
           return sendResponse(res, 401, 'failure', null, 'Token not found');
         }
         
-        const result = await executeCLICommand(mykeysCmd, mykeysArgs, {
+        // Add timeout wrapper to prevent hangs
+        const commandPromise = executeCLICommand(mykeysCmd, mykeysArgs, {
           email: userEmail,
           ringId,
           token: token
         });
         
+        const timeoutPromise = new Promise((_, reject) => 
+          setTimeout(() => reject(new Error('Command execution timeout')), 25000)
+        );
+        
+        const result = await Promise.race([commandPromise, timeoutPromise]);
+        
         output = result.output || '';
         error = result.error || null;
       } catch (cmdError) {
-        error = cmdError.message;
+        error = cmdError.message || 'Command execution failed';
+        console.error('[cli] Command execution error:', cmdError);
       }
     } else {
       // Not a mykeys command - check for built-in commands
