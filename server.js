@@ -909,6 +909,7 @@ app.post('/api/v1/secrets/:ecosystem', authenticate, async (req, res) => {
     const { ecosystem } = req.params;
     const { secret_name, secret_value, description } = req.body;
     const ringId = req.ringId; // From authenticate middleware
+    const userEmail = req.userEmail; // From authenticate middleware
     
     if (!secret_name || secret_value === undefined) {
       return res.status(400).json({ error: 'secret_name and secret_value are required' });
