@@ -459,6 +459,52 @@ async function storeSecret(secretName, secretValue, labels = {}, ringId = null) 
 
 // ========== Static HTML Routes ==========
 // Explicit routes for HTML pages to ensure they're served
+// IMPORTANT: /tools must be registered BEFORE / to prevent React Router from intercepting it
+app.get('/tools', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'tools.html'), (err) => {
+    if (err) {
+      console.error('[server] Error serving /tools:', err);
+      res.status(404).send('Tools page not found');
+    }
+  });
+});
+
+app.get('/tools.html', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'tools.html'), (err) => {
+    if (err) {
+      console.error('[server] Error serving /tools.html:', err);
+      res.status(404).send('Tools page not found');
+    }
+  });
+});
+
+app.get('/cli.html', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'cli.html'), (err) => {
+    if (err) {
+      console.error('[server] Error serving /cli.html:', err);
+      res.status(404).send('CLI page not found');
+    }
+  });
+});
+
+app.get('/cli-overview.html', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'cli-overview.html'), (err) => {
+    if (err) {
+      console.error('[server] Error serving /cli-overview.html:', err);
+      res.status(404).send('CLI overview page not found');
+    }
+  });
+});
+
+app.get('/cli-desktop.html', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'cli-desktop.html'), (err) => {
+    if (err) {
+      console.error('[server] Error serving /cli-desktop.html:', err);
+      res.status(404).send('Desktop CLI page not found');
+    }
+  });
+});
+
 app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
@@ -660,53 +706,6 @@ app.get('/api/v1/health', (req, res) => {
     timestamp: new Date().toISOString(),
     version: '2.0.0',
     project: PROJECT_ID
-  });
-});
-
-// ========== Static HTML Routes (must be before API routes) ==========
-// Serve specific static HTML files FIRST to take precedence over express.static and React Router
-app.get('/tools', (req, res) => {
-  res.sendFile(path.join(__dirname, 'public', 'tools.html'), (err) => {
-    if (err) {
-      console.error('[server] Error serving /tools:', err);
-      res.status(404).send('Tools page not found');
-    }
-  });
-});
-
-app.get('/tools.html', (req, res) => {
-  res.sendFile(path.join(__dirname, 'public', 'tools.html'), (err) => {
-    if (err) {
-      console.error('[server] Error serving /tools.html:', err);
-      res.status(404).send('Tools page not found');
-    }
-  });
-});
-
-app.get('/cli.html', (req, res) => {
-  res.sendFile(path.join(__dirname, 'public', 'cli.html'), (err) => {
-    if (err) {
-      console.error('[server] Error serving /cli.html:', err);
-      res.status(404).send('CLI page not found');
-    }
-  });
-});
-
-app.get('/cli-overview.html', (req, res) => {
-  res.sendFile(path.join(__dirname, 'public', 'cli-overview.html'), (err) => {
-    if (err) {
-      console.error('[server] Error serving /cli-overview.html:', err);
-      res.status(404).send('CLI overview page not found');
-    }
-  });
-});
-
-app.get('/cli-desktop.html', (req, res) => {
-  res.sendFile(path.join(__dirname, 'public', 'cli-desktop.html'), (err) => {
-    if (err) {
-      console.error('[server] Error serving /cli-desktop.html:', err);
-      res.status(404).send('Desktop CLI page not found');
-    }
   });
 });
 
