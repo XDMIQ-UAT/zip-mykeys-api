@@ -3798,61 +3798,11 @@ app.get('/api/sessions/:seed/fragments', authenticateWithDevice, async (req, res
   }
 });
 
-// ========== Error Handling ==========
-
-// Catch-all for undefined API routes (but not static files)
-app.use((req, res, next) => {
-  // Only handle API routes - let static files pass through
-  if (req.path.startsWith('/api/') || req.path === '/health') {
-    res.status(404).json({
-      error: 'Endpoint not found',
-      message: 'The requested endpoint does not exist',
-      service: 'mykeys-api',
-      availableEndpoints: [
-        'GET /health',
-        'GET /api/health',
-        'GET /api/v1/health',
-        'GET /api/secrets',
-        'GET /api/secrets/:name',
-        'POST /api/secrets',
-        'PUT /api/secrets/:name',
-        'DELETE /api/secrets/:name',
-        'GET /api/v1/secrets/:ecosystem/:secretName',
-        'POST /api/v1/secrets/:ecosystem',
-        'GET /api/v1/secrets/:ecosystem',
-        'POST /api/tld/:domain',
-        'GET /api/tld/:domain',
-        'POST /api/auth/verify-partial',
-        'POST /api/auth/request-mfa-code',
-        'POST /api/auth/verify-mfa-code',
-        'GET /api/admin/info',
-        'POST /api/mcp/token/generate',
-        'POST /api/mcp/token/generate-legacy',
-        'POST /api/mcp/token/validate',
-        'POST /api/mcp/token/revoke',
-        'POST /api/devices/register',
-        'POST /api/devices/verify-2fa',
-        'POST /api/devices/validate',
-        'GET /api/devices',
-        'DELETE /api/devices/:deviceId',
-        'PUT /api/sessions/:seed',
-        'GET /api/sessions/:seed',
-        'GET /api/sessions',
-        'DELETE /api/sessions/:seed',
-        'PUT /api/sessions/:seed/fragments/:index',
-        'GET /api/sessions/:seed/fragments/:index',
-        'GET /api/sessions/:seed/fragments'
-      ]
-    });
-  } else {
-    // For non-API routes, let express.static handle it (or return 404 for missing files)
-    next();
-  }
-});
-
 // ============================================================================
 // CLI Online Interface Endpoints
 // ============================================================================
+
+console.log('[server] Registering CLI endpoints...');
 
 // Generate and send magic link for CLI login
 app.post('/api/cli/send-magic-link', async (req, res) => {
