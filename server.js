@@ -4199,14 +4199,14 @@ app.post('/api/cli/execute', authenticate, async (req, res) => {
 You can use commands with or without the "mykeys" prefix:
 
 DIRECT COMMANDS (no prefix needed):
-  list [ecosystem]                    List all secrets
+  list <ecosystem>                    List secrets in an ecosystem
   get <ecosystem> <secretName>       Get a secret value
   set <ecosystem> <secretName> <value>  Set a secret value
   delete <ecosystem> <secretName>    Delete a secret
   admin                               Show admin information
 
 WITH "mykeys" PREFIX (also supported):
-  mykeys list [ecosystem]
+  mykeys list <ecosystem>
   mykeys get <ecosystem> <secretName>
   mykeys set <ecosystem> <secretName> <value>
   mykeys delete <ecosystem> <secretName>
@@ -4218,8 +4218,8 @@ OTHER COMMANDS:
   theme <name>                        Change theme (linux, mac, windows)
 
 Examples:
-  list                                List all secrets
   list shared                         List secrets in "shared" ecosystem
+  list mine                           List secrets in "mine" ecosystem
   get shared api-key                  Get "api-key" from "shared" ecosystem
   set shared api-key abc123           Set "api-key" in "shared" ecosystem
   set mine my-secret "value with spaces"  Set secret with spaces (use quotes)

@@ -52,28 +52,31 @@ async function executeCLICommand(command, args = [], context = {}) {
         return {
           output: `MyKeys CLI Commands:
 
+You can use commands with or without the "mykeys" prefix:
+
 SECRET MANAGEMENT:
-  mykeys list [ecosystem]                    List all secrets (optionally filtered by ecosystem)
-                                              Example: mykeys list
-                                                      mykeys list shared
+  list <ecosystem>                           List secrets in an ecosystem
+                                              Example: list shared
+                                                      list mine
+                                                      list gcp
 
-  mykeys get <ecosystem> <secretName>        Get a secret value
-                                              Example: mykeys get shared api-key
+  get <ecosystem> <secretName>              Get a secret value
+                                              Example: get shared api-key
 
-  mykeys set <ecosystem> <secretName> <value>  Set a secret value
-                                              Example: mykeys set shared api-key abc123
-                                                      mykeys set mine my-secret "my value"
+  set <ecosystem> <secretName> <value>      Set a secret value
+                                              Example: set shared api-key abc123
+                                                      set mine my-secret "my value"
 
-  mykeys delete <ecosystem> <secretName>    Delete a secret
-                                              Example: mykeys delete shared api-key
+  delete <ecosystem> <secretName>            Delete a secret
+                                              Example: delete shared api-key
 
 RING MANAGEMENT:
-  mykeys keys list [ringId]                  List keys in ring
-  mykeys keys get <ringId> <key>            Get key value
-  mykeys rings [ringId]                     Get ring information
+  keys list [ringId]                         List keys in ring
+  keys get <ringId> <key>                    Get key value
+  rings [ringId]                             Get ring information
 
 OTHER:
-  mykeys admin                               Show admin information
+  admin                                      Show admin information
   help                                       Show this help message
   clear / cls                                Clear terminal
   theme <name>                               Change theme (linux, mac, windows)
@@ -81,7 +84,7 @@ OTHER:
 NOTES:
   • All secret commands require an <ecosystem> parameter (e.g., "shared", "mine", "gcp")
   • Secrets are organized by ecosystem for better organization
-  • Use quotes around values with spaces: mykeys set shared key "value with spaces"
+  • Use quotes around values with spaces: set shared key "value with spaces"
 
 User: ${email || 'unknown'}
 Ring: ${ringId || 'default'}
