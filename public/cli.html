@@ -466,14 +466,22 @@
                     
                     // Check if link is provided (for local dev/preview/testing)
                     if (data.data && data.data.link) {
+                        // Ensure email is in the link URL
+                        let magicLink = data.data.link;
+                        if (!magicLink.includes('email=')) {
+                            // Add email to link if missing
+                            const separator = magicLink.includes('?') ? '&' : '?';
+                            magicLink = `${magicLink}${separator}email=${encodeURIComponent(email)}`;
+                        }
+                        
                         const linkMessage = data.data.localDev 
                             ? `<div style="margin: 20px 0;">
-                                <a href="${data.data.link}" style="display: inline-block; background: #667eea; color: white; padding: 12px 24px; text-decoration: none; border-radius: 4px; font-weight: bold; margin-bottom: 10px;">🔗 Click here to sign in</a>
+                                <a href="${magicLink}" onclick="event.preventDefault(); window.location.href='${magicLink}'; return false;" style="display: inline-block; background: #667eea; color: white; padding: 12px 24px; text-decoration: none; border-radius: 4px; font-weight: bold; margin-bottom: 10px; cursor: pointer;">🔗 Click here to sign in</a>
                                 <br><br>
-                                <small style="color: #888;">Or copy this link: <code style="background: #1a1a1a; padding: 2px 6px; border-radius: 2px; word-break: break-all;">${data.data.link}</code></small>
+                                <small style="color: #888;">Or copy this link: <code style="background: #1a1a1a; padding: 2px 6px; border-radius: 2px; word-break: break-all;">${magicLink}</code></small>
                             </div>`
                             : `<div style="margin: 20px 0;">
-                                <a href="${data.data.link}" style="display: inline-block; background: #667eea; color: white; padding: 12px 24px; text-decoration: none; border-radius: 4px; font-weight: bold;">Click here to sign in</a>
+                                <a href="${magicLink}" onclick="event.preventDefault(); window.location.href='${magicLink}'; return false;" style="display: inline-block; background: #667eea; color: white; padding: 12px 24px; text-decoration: none; border-radius: 4px; font-weight: bold; cursor: pointer;">Click here to sign in</a>
                             </div>`;
                         messageDiv.innerHTML = linkMessage;
                         messageDiv.className = 'success-message';
@@ -781,22 +789,30 @@ Note: All secret commands require an <ecosystem> parameter (e.g., "shared", "min
         
         async function verifyMagicLink(token) {
             try {
+                // Small delay to ensure localStorage is available
+                await new Promise(resolve => setTimeout(resolve, 100));
+                
                 // Get email from URL (should be included in magic link)
                 const urlParams = new URLSearchParams(window.location.search);
                 let email = urlParams.get('email');
                 
+                console.log('[verifyMagicLink] Email from URL:', email);
+                
                 // If email not in URL, try to get from pending email (stored when link was generated)
                 if (!email) {
                     email = localStorage.getItem('cliPendingEmail');
+                    console.log('[verifyMagicLink] Email from localStorage:', email);
                 }
                 
                 // If still no email, get from input field
                 if (!email) {
                     const emailInput = document.getElementById('emailInput');
                     email = emailInput ? emailInput.value.trim() : null;
+                    console.log('[verifyMagicLink] Email from input:', email);
                 }
                 
                 if (!email) {
+                    console.error('[verifyMagicLink] No email found anywhere');
                     showMessage(document.getElementById('loginMessage'), 'Email is required to verify magic link. Please enter your email address in the form below.', 'error');
                     // Show login form if email missing
                     document.getElementById('loginScreen').style.display = 'flex';
@@ -809,6 +825,8 @@ Note: All secret commands require an <ecosystem> parameter (e.g., "shared", "min
                 if (emailInput && !emailInput.value) {
                     emailInput.value = email;
                 }
+                
+                console.log('[verifyMagicLink] Using email:', email);
                 
                 const response = await fetch(`${API_BASE}/api/cli/verify-magic-link`, {
                     method: 'POST',
