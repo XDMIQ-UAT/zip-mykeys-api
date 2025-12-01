@@ -460,6 +460,10 @@
                 const data = await response.json();
                 
                 if (response.ok && data.status === 'success') {
+                    // Store email temporarily for magic link verification
+                    // This helps if email is missing from URL
+                    localStorage.setItem('cliPendingEmail', email);
+                    
                     // Check if link is provided (for local dev/preview/testing)
                     if (data.data && data.data.link) {
                         const linkMessage = data.data.localDev 
@@ -781,7 +785,12 @@ Note: All secret commands require an <ecosystem> parameter (e.g., "shared", "min
                 const urlParams = new URLSearchParams(window.location.search);
                 let email = urlParams.get('email');
                 
-                // If email not in URL, get from input field
+                // If email not in URL, try to get from pending email (stored when link was generated)
+                if (!email) {
+                    email = localStorage.getItem('cliPendingEmail');
+                }
+                
+                // If still no email, get from input field
                 if (!email) {
                     const emailInput = document.getElementById('emailInput');
                     email = emailInput ? emailInput.value.trim() : null;
@@ -793,6 +802,12 @@ Note: All secret commands require an <ecosystem> parameter (e.g., "shared", "min
                     document.getElementById('loginScreen').style.display = 'flex';
                     document.getElementById('terminalScreen').style.display = 'none';
                     return;
+                }
+                
+                // Pre-fill email input if it's empty
+                const emailInput = document.getElementById('emailInput');
+                if (emailInput && !emailInput.value) {
+                    emailInput.value = email;
                 }
                 
                 const response = await fetch(`${API_BASE}/api/cli/verify-magic-link`, {
