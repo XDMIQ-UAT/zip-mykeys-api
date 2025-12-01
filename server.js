@@ -3862,13 +3862,13 @@ app.post('/api/cli/send-magic-link', async (req, res) => {
     const magicToken = crypto.randomBytes(32).toString('hex');
     const expiresAt = Date.now() + (15 * 60 * 1000); // 15 minutes
     
-    const kv = getKV();
-    if (!kv) {
+    const storage = getStorage();
+    if (!storage) {
       return sendResponse(res, 500, 'failure', null, 'Storage unavailable');
     }
     
     // Store magic link token
-    await kv.set(`cli:magic-link:${magicToken}`, JSON.stringify({
+    await storage.set(`cli:magic-link:${magicToken}`, JSON.stringify({
       email: normalizedEmail,
       expiresAt,
       createdAt: Date.now()
@@ -3974,13 +3974,13 @@ app.post('/api/cli/verify-magic-link', async (req, res) => {
       return sendResponse(res, 400, 'failure', null, 'Token is required');
     }
     
-    const kv = getKV();
-    if (!kv) {
+    const storage = getStorage();
+    if (!storage) {
       return sendResponse(res, 500, 'failure', null, 'Storage unavailable');
     }
     
     // Get magic link data
-    const magicLinkData = await kv.get(`cli:magic-link:${token}`);
+    const magicLinkData = await storage.get(`cli:magic-link:${token}`);
     
     if (!magicLinkData) {
       return sendResponse(res, 401, 'failure', null, 'Invalid or expired magic link');
@@ -3996,19 +3996,19 @@ app.post('/api/cli/verify-magic-link', async (req, res) => {
     
     // Check expiration
     if (Date.now() > linkData.expiresAt) {
-      await kv.del(`cli:magic-link:${token}`);
+      await storage.del(`cli:magic-link:${token}`);
       return sendResponse(res, 401, 'failure', null, 'Magic link has expired');
     }
     
     // Delete magic link (one-time use)
-    await kv.del(`cli:magic-link:${token}`);
+    await storage.del(`cli:magic-link:${token}`);
     
     // Generate CLI session token
     const sessionToken = crypto.randomBytes(32).toString('hex');
     const sessionExpiresAt = Date.now() + (24 * 60 * 60 * 1000); // 24 hours
     
     // Store session
-    await kv.set(`cli:session:${sessionToken}`, JSON.stringify({
+    await storage.set(`cli:session:${sessionToken}`, JSON.stringify({
       email: linkData.email,
       createdAt: Date.now(),
       expiresAt: sessionExpiresAt,

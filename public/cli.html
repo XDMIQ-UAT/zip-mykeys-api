@@ -422,8 +422,15 @@
                 const data = await response.json();
                 
                 if (response.ok && data.status === 'success') {
-                    showMessage(messageDiv, `Magic link sent to ${email}. Check your email and click the link to sign in.`, 'success');
-                    sendBtn.textContent = 'Link Sent ✓';
+                    // Check if email failed but link is provided (for preview/testing)
+                    if (data.data && data.data.link) {
+                        const linkMessage = `Email sending failed (preview mode). <a href="${data.data.link}" style="color: #667eea; text-decoration: underline;">Click here to sign in</a>`;
+                        showMessage(messageDiv, linkMessage, 'success');
+                        sendBtn.textContent = 'Link Generated ✓';
+                    } else {
+                        showMessage(messageDiv, `Magic link sent to ${email}. Check your email and click the link to sign in.`, 'success');
+                        sendBtn.textContent = 'Link Sent ✓';
+                    }
                 } else {
                     showMessage(messageDiv, data.message || 'Failed to send magic link', 'error');
                     sendBtn.disabled = false;
