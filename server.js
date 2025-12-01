@@ -4343,4 +4343,6 @@ if (process.env.VERCEL !== '1') {
   console.log(`📦 Project: ${PROJECT_ID}`);
 }
 
+// Export app and authenticate middleware for use in route modules
 module.exports = app;
+module.exports.authenticate = authenticate;
