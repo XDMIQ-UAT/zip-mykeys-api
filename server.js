@@ -459,12 +459,17 @@ async function storeSecret(secretName, secretValue, labels = {}, ringId = null) 
 
 // ========== Static HTML Routes ==========
 // Explicit routes for HTML pages to ensure they're served
-// IMPORTANT: /tools must be registered BEFORE / to prevent React Router from intercepting it
-app.get('/tools', (req, res) => {
-  // Set cache-busting headers to prevent Vercel/CDN from serving old cached version
-  res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+// Helper function to set cache-busting headers (prevents Vercel/CDN caching issues)
+function setNoCacheHeaders(res) {
+  res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate, max-age=0');
   res.setHeader('Pragma', 'no-cache');
   res.setHeader('Expires', '0');
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+}
+
+// IMPORTANT: /tools must be registered BEFORE / to prevent React Router from intercepting it
+app.get('/tools', (req, res) => {
+  setNoCacheHeaders(res);
   res.sendFile(path.join(__dirname, 'public', 'tools.html'), (err) => {
     if (err) {
       console.error('[server] Error serving /tools:', err);
@@ -474,10 +479,7 @@ app.get('/tools', (req, res) => {
 });
 
 app.get('/tools.html', (req, res) => {
-  // Set cache-busting headers to prevent Vercel/CDN from serving old cached version
-  res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
-  res.setHeader('Pragma', 'no-cache');
-  res.setHeader('Expires', '0');
+  setNoCacheHeaders(res);
   res.sendFile(path.join(__dirname, 'public', 'tools.html'), (err) => {
     if (err) {
       console.error('[server] Error serving /tools.html:', err);
@@ -487,6 +489,7 @@ app.get('/tools.html', (req, res) => {
 });
 
 app.get('/cli.html', (req, res) => {
+  setNoCacheHeaders(res);
   res.sendFile(path.join(__dirname, 'public', 'cli.html'), (err) => {
     if (err) {
       console.error('[server] Error serving /cli.html:', err);
@@ -496,6 +499,7 @@ app.get('/cli.html', (req, res) => {
 });
 
 app.get('/cli-overview.html', (req, res) => {
+  setNoCacheHeaders(res);
   res.sendFile(path.join(__dirname, 'public', 'cli-overview.html'), (err) => {
     if (err) {
       console.error('[server] Error serving /cli-overview.html:', err);
@@ -505,6 +509,7 @@ app.get('/cli-overview.html', (req, res) => {
 });
 
 app.get('/cli-desktop.html', (req, res) => {
+  setNoCacheHeaders(res);
   res.sendFile(path.join(__dirname, 'public', 'cli-desktop.html'), (err) => {
     if (err) {
       console.error('[server] Error serving /cli-desktop.html:', err);
@@ -524,9 +529,7 @@ app.get('/mcp-config-generator.html', (req, res) => {
 
 // Serve v2 file directly - this is the working version
 app.get('/mcp-config-generator-v2.html', (req, res) => {
-  // Set cache headers to prevent stale content
-  res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
-  res.setHeader('Pragma', 'no-cache');
+  setNoCacheHeaders(res);
   res.setHeader('Expires', '0');
   res.setHeader('X-Deployment-Verification', 'v2.5.0-V2-PERMANENT');
   res.setHeader('ETag', `"${Date.now()}"`); // Force new ETag on every request
@@ -579,6 +582,7 @@ app.get('/mcp-config-generator-v2.html', (req, res) => {
 });
 
 app.get('/generate-token.html', (req, res) => {
+  setNoCacheHeaders(res);
   res.sendFile(path.join(__dirname, 'public', 'generate-token.html'));
 });
 
@@ -588,6 +592,7 @@ app.get('/generate-token', (req, res) => {
 });
 
 app.get('/rebuild', (req, res) => {
+  setNoCacheHeaders(res);
   const filePath = path.join(__dirname, 'public', 'rebuild.html');
   res.sendFile(filePath, (err) => {
     if (err) {

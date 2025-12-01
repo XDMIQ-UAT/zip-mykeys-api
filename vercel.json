@@ -8,47 +8,78 @@
   ],
   "routes": [
     {
-      "src": "/mcp-config-generator.html",
-      "dest": "/server.js",
-      "headers": {
-        "Cache-Control": "no-cache, no-store, must-revalidate",
-        "Pragma": "no-cache",
-        "Expires": "0"
-      }
-    },
-    {
-      "src": "/mcp-config-generator-v2.html",
-      "dest": "/server.js"
-    },
-    {
-      "src": "/cli.html",
-      "dest": "/server.js"
-    },
-    {
       "src": "/tools",
       "dest": "/server.js",
       "headers": {
-        "Cache-Control": "no-cache, no-store, must-revalidate",
+        "Cache-Control": "no-cache, no-store, must-revalidate, max-age=0",
         "Pragma": "no-cache",
-        "Expires": "0"
+        "Expires": "0",
+        "X-Content-Type-Options": "nosniff"
       }
     },
     {
       "src": "/tools.html",
       "dest": "/server.js",
       "headers": {
-        "Cache-Control": "no-cache, no-store, must-revalidate",
+        "Cache-Control": "no-cache, no-store, must-revalidate, max-age=0",
+        "Pragma": "no-cache",
+        "Expires": "0",
+        "X-Content-Type-Options": "nosniff"
+      }
+    },
+    {
+      "src": "/cli.html",
+      "dest": "/server.js",
+      "headers": {
+        "Cache-Control": "no-cache, no-store, must-revalidate, max-age=0",
         "Pragma": "no-cache",
         "Expires": "0"
       }
     },
     {
       "src": "/cli-overview.html",
-      "dest": "/server.js"
+      "dest": "/server.js",
+      "headers": {
+        "Cache-Control": "no-cache, no-store, must-revalidate, max-age=0",
+        "Pragma": "no-cache",
+        "Expires": "0"
+      }
     },
     {
       "src": "/cli-desktop.html",
-      "dest": "/server.js"
+      "dest": "/server.js",
+      "headers": {
+        "Cache-Control": "no-cache, no-store, must-revalidate, max-age=0",
+        "Pragma": "no-cache",
+        "Expires": "0"
+      }
+    },
+    {
+      "src": "/mcp-config-generator.html",
+      "dest": "/server.js",
+      "headers": {
+        "Cache-Control": "no-cache, no-store, must-revalidate, max-age=0",
+        "Pragma": "no-cache",
+        "Expires": "0"
+      }
+    },
+    {
+      "src": "/mcp-config-generator-v2.html",
+      "dest": "/server.js",
+      "headers": {
+        "Cache-Control": "no-cache, no-store, must-revalidate, max-age=0",
+        "Pragma": "no-cache",
+        "Expires": "0"
+      }
+    },
+    {
+      "src": "/generate-token.html",
+      "dest": "/server.js",
+      "headers": {
+        "Cache-Control": "no-cache, no-store, must-revalidate, max-age=0",
+        "Pragma": "no-cache",
+        "Expires": "0"
+      }
     },
     {
       "src": "/(.*)",
