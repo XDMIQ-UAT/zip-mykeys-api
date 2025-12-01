@@ -4350,17 +4350,7 @@ app.get('/oauth2callback', (req, res) => {
   res.redirect('/role-management.html');
 });
 
-// Load modular routes from routes directory
-try {
-  const { loadRoutes } = require('./routes');
-  loadRoutes(app);
-  console.log('[server] Modular routes loaded');
-} catch (error) {
-  console.warn('[server] Could not load modular routes:', error.message);
-  console.warn('[server] Continuing without modular routes...');
-}
-
-// Serve specific static HTML files before catch-all
+// Serve specific static HTML files BEFORE modular routes (to avoid conflicts)
 app.get('/tools', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'tools.html'));
 });
@@ -4376,6 +4366,16 @@ app.get('/cli.html', (req, res) => {
 app.get('/cli-overview.html', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'cli-overview.html'));
 });
+
+// Load modular routes from routes directory
+try {
+  const { loadRoutes } = require('./routes');
+  loadRoutes(app);
+  console.log('[server] Modular routes loaded');
+} catch (error) {
+  console.warn('[server] Could not load modular routes:', error.message);
+  console.warn('[server] Continuing without modular routes...');
+}
 
 // Serve static files (including React Router app)
 app.use(express.static(path.join(__dirname, 'public'), {
