@@ -21,7 +21,6 @@
                         <a href="/about">About</a>
                         <a href="/docs">Docs</a>
                         <a href="/tools">Tools</a>
-                        <a href="/cli.html">CLI</a>
                     </div>
                 </nav>
             </div>
