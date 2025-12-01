@@ -4032,6 +4032,11 @@ app.post('/api/cli/execute', authenticate, async (req, res) => {
     const userEmail = req.userEmail;
     const ringId = req.ringId;
     
+    if (!userEmail || !ringId) {
+      console.error('[cli] Missing user context:', { userEmail, ringId, authType: req.authType });
+      return sendResponse(res, 403, 'failure', null, 'User context missing for CLI execution');
+    }
+    
     if (!command) {
       return sendResponse(res, 400, 'failure', null, 'Command is required');
     }
@@ -4053,6 +4058,16 @@ app.post('/api/cli/execute', authenticate, async (req, res) => {
         const { executeCLICommand } = require('./cli-handler');
         // Use req.token if available (set by authenticate middleware), otherwise extract from header
         const token = req.token || req.headers.authorization?.replace('Bearer ', '');
+        
+        if (!token) {
+          console.error('[cli] No token available for CLI execution:', { 
+            hasReqToken: !!req.token, 
+            hasAuthHeader: !!req.headers.authorization,
+            authType: req.authType 
+          });
+          return sendResponse(res, 401, 'failure', null, 'Token not found');
+        }
+        
         const result = await executeCLICommand(mykeysCmd, args, {
           email: userEmail,
           ringId,
