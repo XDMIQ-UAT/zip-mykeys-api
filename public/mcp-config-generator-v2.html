@@ -1258,8 +1258,53 @@
 // Full config file format (for manual file editing):
 ${fullConfigJson}`;
             
-            generatedConfig = serverJson; // Store just the server JSON for copying
-            document.getElementById('configOutput').textContent = configOutput;
+            // Store clean JSON (no comments) for copying
+            generatedConfig = serverJson;
+            
+            // Display JSON in code block (just the JSON, no comments)
+            const codeElement = document.getElementById('configOutput');
+            if (codeElement) {
+                codeElement.textContent = serverJson;
+            }
+            
+            // Show download instructions above the code block if using hosted
+            if (serverSource === 'hosted') {
+                const codeSnippet = document.querySelector('#configResult .code-snippet');
+                const resultBox = document.getElementById('configResult');
+                
+                // Remove existing download instructions if any
+                const existingInstructions = resultBox.querySelector('.download-instructions');
+                if (existingInstructions) {
+                    existingInstructions.remove();
+                }
+                
+                // Create download instructions box
+                let downloadInstructions;
+                if (isWindows) {
+                    downloadInstructions = `First, download the MCP server (PowerShell):
+New-Item -ItemType Directory -Force -Path "$env:USERPROFILE\\.mykeys"
+Invoke-WebRequest -Uri "https://mykeys.zip/mcp-server.js" -OutFile "$env:USERPROFILE\\.mykeys\\mcp-server.js"
+
+Or using CMD:
+mkdir "%USERPROFILE%\\.mykeys"
+curl -o "%USERPROFILE%\\.mykeys\\mcp-server.js" https://mykeys.zip/mcp-server.js`;
+                } else {
+                    downloadInstructions = `First, download the MCP server:
+mkdir -p ~/.mykeys
+curl -o ~/.mykeys/mcp-server.js https://mykeys.zip/mcp-server.js`;
+                }
+                
+                const instructionsDiv = document.createElement('div');
+                instructionsDiv.className = 'download-instructions';
+                instructionsDiv.style.cssText = 'margin-bottom: 16px; padding: 12px; background: #fff3cd; border-left: 4px solid #ffc107; border-radius: 4px; font-size: 13px; color: #856404;';
+                instructionsDiv.innerHTML = `<strong>📥 Download Instructions:</strong><br><pre style="margin: 8px 0 0 0; font-size: 12px; white-space: pre-wrap; font-family: monospace;">${downloadInstructions}</pre>`;
+                
+                // Insert before code snippet
+                if (codeSnippet && codeSnippet.parentNode) {
+                    codeSnippet.parentNode.insertBefore(instructionsDiv, codeSnippet);
+                }
+            }
+            
             document.getElementById('configResult').classList.add('show');
             return true;
         }
