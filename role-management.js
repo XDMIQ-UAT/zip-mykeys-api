@@ -178,7 +178,7 @@ async function getAllUserRoles(ringId = null) {
       return initialRoles;
     }
     
-    // Handle both string and object responses from KV
+    // Handle both string and object responses from storage
     return typeof rolesData === 'string' ? JSON.parse(rolesData) : rolesData;
   } catch (error) {
     console.error('[role-management] Error getting all user roles:', error.message);

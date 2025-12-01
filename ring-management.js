@@ -128,7 +128,7 @@ async function getRingForEmail(email) {
     const ringsData = await kv.get(RINGS_KEY);
     if (!ringsData) return null;
     
-    // Handle both string and object responses from KV
+    // Handle both string and object responses from storage
     const rings = typeof ringsData === 'string' ? JSON.parse(ringsData) : ringsData;
     
     // Find ring containing this email
@@ -304,7 +304,7 @@ async function getRing(ringId) {
     const ringsData = await kv.get(RINGS_KEY);
     if (!ringsData) return null;
     
-    // Handle both string and object responses from KV
+    // Handle both string and object responses from storage
     const rings = typeof ringsData === 'string' ? JSON.parse(ringsData) : ringsData;
     return rings[ringId] || null;
   } catch (error) {
@@ -325,7 +325,7 @@ async function getAllRings() {
     const ringsData = await kv.get(RINGS_KEY);
     if (!ringsData) return {};
     
-    // Handle both string and object responses from KV
+    // Handle both string and object responses from storage
     return typeof ringsData === 'string' ? JSON.parse(ringsData) : ringsData;
   } catch (error) {
     console.error('[ring-management] Error getting all rings:', error.message);
@@ -356,7 +356,7 @@ async function updateRingRoles(ringId, roles) {
       throw new Error(`Ring ${ringId} not found`);
     }
     
-    // Handle both string and object responses from KV
+    // Handle both string and object responses from storage
     const rings = typeof ringsData === 'string' ? JSON.parse(ringsData) : ringsData;
     const ring = rings[ringId];
     
@@ -512,7 +512,7 @@ async function removeRingMember(ringId, email) {
       throw new Error(`Ring ${ringId} not found`);
     }
     
-    // Handle both string and object responses from KV
+    // Handle both string and object responses from storage
     const rings = typeof ringsData === 'string' ? JSON.parse(ringsData) : ringsData;
     const ring = rings[ringId];
     
@@ -595,7 +595,7 @@ async function initializeDefaultRing() {
     const ringsData = await kv.get(RINGS_KEY);
     if (ringsData) {
       // Rings already exist, return first ring
-      // Handle both string and object responses from KV
+      // Handle both string and object responses from storage
       const rings = typeof ringsData === 'string' ? JSON.parse(ringsData) : ringsData;
       const firstRingId = Object.keys(rings)[0];
       return rings[firstRingId];
