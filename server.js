@@ -4123,11 +4123,24 @@ app.post('/api/cli/execute', authenticate, async (req, res) => {
     let output = '';
     let error = null;
     
-    // Handle mykeys commands
+    // List of direct mykeys commands (can be used without "mykeys" prefix)
+    const mykeysCommands = ['list', 'get', 'set', 'delete', 'remove', 'admin', 'keys', 'rings', 'secrets'];
+    
+    // Handle mykeys commands (with or without "mykeys" prefix)
+    let mykeysCmd;
+    let mykeysArgs;
+    
     if (cmd === 'mykeys' || cmd.startsWith('mykeys')) {
-      const mykeysCmd = parts[1] || 'help';
-      // Remove the command itself from args (args currently includes "set", "get", etc.)
-      const mykeysArgs = parts.slice(2);
+      // Command starts with "mykeys" - extract subcommand
+      mykeysCmd = parts[1] || 'help';
+      mykeysArgs = parts.slice(2);
+    } else if (mykeysCommands.includes(cmd)) {
+      // Direct command without "mykeys" prefix
+      mykeysCmd = cmd;
+      mykeysArgs = args;
+    }
+    
+    if (mykeysCmd) {
       
       try {
         // Import CLI handler
@@ -4156,7 +4169,43 @@ app.post('/api/cli/execute', authenticate, async (req, res) => {
         error = cmdError.message;
       }
     } else {
-      output = `Command '${cmd}' not found. Type 'help' for available commands.`;
+      // Not a mykeys command - check for built-in commands
+      if (cmd === 'help') {
+        output = `MyKeys CLI Commands:
+
+You can use commands with or without the "mykeys" prefix:
+
+DIRECT COMMANDS (no prefix needed):
+  list [ecosystem]                    List all secrets
+  get <ecosystem> <secretName>       Get a secret value
+  set <ecosystem> <secretName> <value>  Set a secret value
+  delete <ecosystem> <secretName>    Delete a secret
+  admin                               Show admin information
+
+WITH "mykeys" PREFIX (also supported):
+  mykeys list [ecosystem]
+  mykeys get <ecosystem> <secretName>
+  mykeys set <ecosystem> <secretName> <value>
+  mykeys delete <ecosystem> <secretName>
+  mykeys admin
+
+OTHER COMMANDS:
+  help                                Show this help message
+  clear / cls                         Clear terminal
+  theme <name>                        Change theme (linux, mac, windows)
+
+Examples:
+  list                                List all secrets
+  list shared                         List secrets in "shared" ecosystem
+  get shared api-key                  Get "api-key" from "shared" ecosystem
+  set shared api-key abc123           Set "api-key" in "shared" ecosystem
+  set mine my-secret "value with spaces"  Set secret with spaces (use quotes)
+  admin                               Show admin information
+
+Note: All secret commands require an <ecosystem> parameter (e.g., "shared", "mine", "gcp")`;
+      } else {
+        output = `Command '${cmd}' not found. Type 'help' for available commands.`;
+      }
     }
     
     return sendResponse(res, 200, 'success', {

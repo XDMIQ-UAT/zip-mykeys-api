@@ -586,19 +586,29 @@ Available commands:
   clear / cls       Clear terminal
   theme <name>      Change theme (linux, mac, windows)
 
-MyKeys commands:
-  mykeys list [ecosystem]                    List all secrets (optionally filtered by ecosystem)
-  mykeys get <ecosystem> <secretName>        Get a secret value
-  mykeys set <ecosystem> <secretName> <value>  Set a secret value
-  mykeys delete <ecosystem> <secretName>     Delete a secret
-  mykeys admin                               Show admin information
+MyKeys commands (you can use with or without "mykeys" prefix):
+
+DIRECT COMMANDS (no prefix needed):
+  list [ecosystem]                    List all secrets
+  get <ecosystem> <secretName>        Get a secret value
+  set <ecosystem> <secretName> <value>  Set a secret value
+  delete <ecosystem> <secretName>     Delete a secret
+  admin                               Show admin information
+
+WITH "mykeys" PREFIX (also supported):
+  mykeys list [ecosystem]
+  mykeys get <ecosystem> <secretName>
+  mykeys set <ecosystem> <secretName> <value>
+  mykeys delete <ecosystem> <secretName>
+  mykeys admin
 
 Examples:
-  mykeys list                                 List all secrets
-  mykeys list shared                          List secrets in "shared" ecosystem
-  mykeys get shared api-key                   Get "api-key" from "shared" ecosystem
-  mykeys set shared api-key abc123            Set "api-key" in "shared" ecosystem to "abc123"
-  mykeys set mine my-secret "value with spaces"  Set secret with spaces (use quotes)
+  list                                 List all secrets
+  list shared                          List secrets in "shared" ecosystem
+  get shared api-key                   Get "api-key" from "shared" ecosystem
+  set shared api-key abc123            Set "api-key" in "shared" ecosystem to "abc123"
+  set mine my-secret "value with spaces"  Set secret with spaces (use quotes)
+  admin                                Show admin information
 
 Note: All secret commands require an <ecosystem> parameter (e.g., "shared", "mine", "gcp")
             `.trim();
