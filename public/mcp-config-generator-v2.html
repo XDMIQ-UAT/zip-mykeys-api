@@ -1144,12 +1144,23 @@
         
         // Function to generate MCP configuration
         function generateMCPConfig() {
+            console.log('generateMCPConfig called');
+            
             const token = document.getElementById('mcpToken').value;
             const clientId = document.getElementById('clientId').value;
             const clientType = document.getElementById('clientType').value;
             const serverSource = document.getElementById('serverSource').value;
             let serverPath = document.getElementById('serverPath').value.trim();
             const mykeysUrl = document.getElementById('mykeysUrl').value;
+            
+            console.log('Form values:', { token: token ? '***' : 'empty', clientId, clientType, serverSource, serverPath, mykeysUrl });
+            
+            // Validate token is present
+            if (!token || token.trim() === '') {
+                alert('Please generate a token first by completing Step 1 (email verification).');
+                console.error('No token found');
+                return false;
+            }
             
             // Get target platform
             const targetPlatform = document.getElementById('targetPlatform').value;
@@ -1328,11 +1339,35 @@ curl -o ~/.mykeys/mcp-server.js https://mykeys.zip/mcp-server.js`;
             return true;
         }
         
-        // Config Form
-        document.getElementById('configForm').addEventListener('submit', (e) => {
-            e.preventDefault();
-            generateMCPConfig();
-        });
+        // Config Form - setup after DOM is ready
+        function setupConfigForm() {
+            const configForm = document.getElementById('configForm');
+            if (!configForm) {
+                console.error('Config form not found');
+                return;
+            }
+            
+            // Remove existing listener by cloning
+            const newForm = configForm.cloneNode(true);
+            configForm.parentNode.replaceChild(newForm, configForm);
+            
+            // Attach listener to new form
+            document.getElementById('configForm').addEventListener('submit', (e) => {
+                e.preventDefault();
+                console.log('Config form submitted');
+                const result = generateMCPConfig();
+                if (!result) {
+                    console.error('generateMCPConfig returned false');
+                }
+            });
+        }
+        
+        // Setup config form when page loads
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', setupConfigForm);
+        } else {
+            setupConfigForm();
+        }
         
         function copyToken(event) {
             if (generatedToken) {
