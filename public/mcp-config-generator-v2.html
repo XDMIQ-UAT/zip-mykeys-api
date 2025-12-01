@@ -519,19 +519,8 @@
         }
     </style>
     <script>
-        // Deployment verification log - runs immediately
-        (function() {
-            console.log('%c🚀 MCP Config Generator V2 - Deployment Active', 'color: #667eea; font-size: 14px; font-weight: bold;');
-            console.log('%c✅ File: mcp-config-generator-v2.html', 'color: #28a745; font-size: 12px;');
-            console.log('%c📅 Last Updated: 2025-12-01', 'color: #666; font-size: 11px;');
-            console.log('%c🔢 Version: v2.3.0-V2-FILE', 'color: #ff0000; font-size: 16px; font-weight: bold;');
-            console.log('%c⚠️ V2 FILE TEST - If you see this, v2 deployment is working!', 'color: #ff0000; font-size: 14px; font-weight: bold; background: yellow; padding: 5px;');
-            console.log('%c🔧 Container Width: 550px max-width', 'color: #666; font-size: 11px;');
-            console.log('=== MCP Config Generator V2 Loaded ===');
-            console.log('Deployment verification: File mcp-config-generator-v2.html is active');
-            console.log('Current URL:', window.location.href);
-        })();
-        console.log('=== BEFORE shared-layout.js script tag ===');
+        // Single deployment verification log
+        console.log('%c✅ MCP Config Generator v2.6.0 - SessionStorage Enabled - ' + new Date().toLocaleTimeString(), 'color: #00ff00; font-size: 16px; font-weight: bold; background: #000; padding: 5px;');
     </script>
     <script src="/shared-layout.js?v=2" onerror="alert('FAILED to load shared-layout.js')" onload="if(document.body) document.body.setAttribute('data-layout-loaded', 'true')"></script>
     <script>
