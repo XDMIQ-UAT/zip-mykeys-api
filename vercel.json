@@ -21,6 +21,10 @@
       "dest": "/server.js"
     },
     {
+      "src": "/cli.html",
+      "dest": "/server.js"
+    },
+    {
       "src": "/generate-token.html",
       "dest": "/server.js"
     },
