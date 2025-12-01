@@ -108,21 +108,27 @@ Ring: ${ringId || 'default'}
 async function handleListSecrets(token, ecosystem = null) {
   try {
     const baseUrl = MYKEYS_URL || '';
-    const url = ecosystem 
-      ? `${baseUrl}/api/v1/secrets/${ecosystem}`
-      : `${baseUrl}/api/v1/secrets`;
     
+    // If no ecosystem specified, show message asking for one
+    if (!ecosystem) {
+      return { 
+        output: 'Please specify an ecosystem.\n\nUsage: list <ecosystem>\n\nExample: list shared\n         list mine\n         list gcp' 
+      };
+    }
+    
+    const url = `${baseUrl}/api/v1/secrets/${ecosystem}`;
     const data = await apiRequest('GET', url, null, token);
     
     if (data.secrets && Array.isArray(data.secrets)) {
       if (data.secrets.length === 0) {
-        return { output: 'No secrets found.' };
+        return { output: `No secrets found in ecosystem '${ecosystem}'.` };
       }
       
-      let output = `Found ${data.secrets.length} secret(s):\n\n`;
+      let output = `Found ${data.secrets.length} secret(s) in ecosystem '${ecosystem}':\n\n`;
       data.secrets.forEach(secret => {
-        output += `  ${secret.secret_name || secret.name}\n`;
-        if (secret.ecosystem) {
+        const secretName = secret.secret_name || secret.name || secret;
+        output += `  ${secretName}\n`;
+        if (secret.ecosystem && secret.ecosystem !== ecosystem) {
           output += `    Ecosystem: ${secret.ecosystem}\n`;
         }
         if (secret.created) {
@@ -168,7 +174,7 @@ async function handleGetSecret(token, ecosystem, secretName) {
  */
 async function handleSetSecret(token, ecosystem, secretName, value) {
   if (!ecosystem || !secretName || value === undefined) {
-    return { output: '', error: 'Usage: mykeys set <ecosystem> <secretName> <value>' };
+    return { output: '', error: 'Usage: set <ecosystem> <secretName> <value>' };
   }
   
   try {
@@ -180,7 +186,14 @@ async function handleSetSecret(token, ecosystem, secretName, value) {
       secret_value: value 
     }, token);
     
-    return { output: `Secret '${secretName}' set successfully in ecosystem '${ecosystem}'.` };
+    // Check if API returned a success message
+    if (data.message) {
+      return { output: data.message };
+    } else if (data.success) {
+      return { output: `Secret '${secretName}' set successfully in ecosystem '${ecosystem}'.` };
+    } else {
+      return { output: `Secret '${secretName}' set successfully in ecosystem '${ecosystem}'.` };
+    }
   } catch (error) {
     return { output: '', error: error.message };
   }
@@ -215,17 +228,38 @@ async function handleAdmin(token) {
     const data = await apiRequest('GET', url, null, token);
     
     let output = 'Admin Information:\n\n';
-    if (data.user) {
-      output += `User: ${data.user}\n`;
+    if (data.email) {
+      output += `Email: ${data.email}\n`;
     }
-    if (data.ringId) {
-      output += `Ring ID: ${data.ringId}\n`;
+    if (data.primaryRole) {
+      output += `Primary Role: ${data.primaryRole}\n`;
     }
     if (data.roles && Array.isArray(data.roles)) {
       output += `Roles: ${data.roles.join(', ')}\n`;
     }
+    if (data.permissions && Array.isArray(data.permissions)) {
+      output += `Permissions: ${data.permissions.join(', ')}\n`;
+    }
     if (data.capabilities && Array.isArray(data.capabilities)) {
       output += `Capabilities: ${data.capabilities.join(', ')}\n`;
+    }
+    if (data.stats) {
+      output += `\nStats:\n`;
+      if (data.stats.secretsCount !== undefined) {
+        output += `  Secrets: ${data.stats.secretsCount}\n`;
+      }
+      if (data.stats.ecosystemsCount !== undefined) {
+        output += `  Ecosystems: ${data.stats.ecosystemsCount}\n`;
+      }
+    }
+    if (data.tokenInfo) {
+      output += `\nToken Info:\n`;
+      if (data.tokenInfo.clientId) {
+        output += `  Client ID: ${data.tokenInfo.clientId}\n`;
+      }
+      if (data.tokenInfo.expiresAt) {
+        output += `  Expires: ${data.tokenInfo.expiresAt}\n`;
+      }
     }
     
     return { output: output.trim() || JSON.stringify(data, null, 2) };
