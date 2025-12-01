@@ -87,7 +87,7 @@ describe('CLI Handler', () => {
     });
 
     test('should handle list command', async () => {
-      const https = require('https');
+      const http = require('http');
       const mockResponse = {
         statusCode: 200,
         on: jest.fn((event, callback) => {
@@ -104,7 +104,8 @@ describe('CLI Handler', () => {
         write: jest.fn(),
         end: jest.fn()
       };
-      https.request.mockImplementation((options, callback) => {
+      // Mock http.request for local dev (uses http://localhost:8080)
+      http.request.mockImplementation((options, callback) => {
         callback(mockResponse);
         return mockRequest;
       });
