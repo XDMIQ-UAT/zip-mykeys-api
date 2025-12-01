@@ -587,6 +587,23 @@
                 return;
             }
             
+            // Validate command format before sending to server
+            const parts = command.trim().split(/\s+/);
+            const cmd = parts[0];
+            const validCommands = ['list', 'get', 'set', 'delete', 'remove', 'admin', 'keys', 'rings', 'secrets'];
+            const validMykeysCommands = ['mykeys'];
+            
+            // Check if it's a valid direct command or starts with 'mykeys'
+            const isValidCommand = validCommands.includes(cmd) || 
+                                  validMykeysCommands.includes(cmd) ||
+                                  cmd === 'help';
+            
+            if (!isValidCommand && cmd.length > 0) {
+                addOutput(output, `Unknown command: ${cmd}. Type 'help' for available commands.`, 'error');
+                resetInputState();
+                return;
+            }
+            
             // Send command to server with timeout
             try {
                 // Create a timeout promise
