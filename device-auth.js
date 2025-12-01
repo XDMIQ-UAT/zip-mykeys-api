@@ -13,11 +13,20 @@ const crypto = require('crypto');
 const { Redis } = require('@upstash/redis');
 const { sendAuthCode } = require('./email-service');
 
-// Initialize Upstash Redis client
-const redis = new Redis({
-  url: process.env.UPSTASH_REDIS_REST_URL,
-  token: process.env.UPSTASH_REDIS_REST_TOKEN,
-});
+// Initialize Upstash Redis client (only if env vars are available)
+let redis = null;
+if (process.env.UPSTASH_REDIS_REST_URL && process.env.UPSTASH_REDIS_REST_TOKEN) {
+  try {
+    redis = new Redis({
+      url: process.env.UPSTASH_REDIS_REST_URL,
+      token: process.env.UPSTASH_REDIS_REST_TOKEN,
+    });
+  } catch (error) {
+    console.warn('[device-auth] Failed to initialize Redis client:', error.message);
+  }
+} else {
+  console.warn('[device-auth] Redis not configured - device token validation will be disabled for local development');
+}
 
 // Storage prefixes
 const DEVICE_SECRET_PREFIX = 'device-';
@@ -54,6 +63,10 @@ function generate2FACode() {
  * @returns {Promise<Object>} - Challenge data with email status
  */
 async function store2FAChallenge(challengeId, code, deviceFingerprint, username, metadata = {}) {
+  if (!redis) {
+    throw new Error('Storage not configured - cannot store 2FA challenge');
+  }
+  
   const challengeData = {
     code: code,
     deviceFingerprint: deviceFingerprint,
@@ -194,6 +207,11 @@ async function registerDevice(deviceFingerprint, username) {
  * Validate device token
  */
 async function validateDeviceToken(token) {
+  // Skip validation if Redis isn't configured (local development)
+  if (!redis) {
+    return { valid: false, reason: 'Device token validation not available (storage not configured)' };
+  }
+  
   const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
 
   try {

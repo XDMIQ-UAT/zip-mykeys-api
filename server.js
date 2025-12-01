@@ -161,10 +161,10 @@ const authenticate = async (req, res, next) => {
   if (authHeader.startsWith('Bearer ')) {
     const token = authHeader.substring(7);
     if (token.length >= 32) {
-      // Try device token first
+      // Try device token first (skip if storage not configured)
       try {
         const deviceValidation = await validateDeviceToken(token);
-        if (deviceValidation.valid) {
+        if (deviceValidation && deviceValidation.valid) {
           req.authType = 'device';
           req.deviceId = deviceValidation.deviceId;
           req.username = deviceValidation.username;
@@ -173,7 +173,11 @@ const authenticate = async (req, res, next) => {
           return next();
         }
       } catch (err) {
-        // Continue to MCP token check
+        // Continue to CLI session token check (device auth not available or failed)
+        // Don't log errors for missing storage in local dev
+        if (!err.message?.includes('Storage not configured')) {
+          console.error('[auth] Device token validation error:', err.message);
+        }
       }
 
       // Try CLI session token first
