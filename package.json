@@ -23,6 +23,7 @@
     "test:report": "playwright show-report",
     "test:unit": "jest tests/unit",
     "test:all": "npm run test:unit && npm test",
+    "create-route": "node scripts/create-route.js",
     "cli": "node mykeys-cli.js",
     "deploy": "gcloud run deploy mykeys-api --source . --region us-central1 --allow-unauthenticated",
     "deploy:vercel": "powershell -ExecutionPolicy Bypass -File scripts/deploy-vercel.ps1",
