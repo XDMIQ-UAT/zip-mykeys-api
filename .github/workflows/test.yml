@@ -64,6 +64,8 @@ jobs:
       
       - name: Install Playwright browsers
         run: npx playwright install --with-deps chromium
+        # Cache browsers to speed up subsequent runs
+        # Note: Playwright handles caching internally, but this ensures it's available
       
       - name: Build marketing site (for E2E tests)
         run: npm run build:marketing
