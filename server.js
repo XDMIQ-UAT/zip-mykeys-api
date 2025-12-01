@@ -3943,7 +3943,13 @@ app.post('/api/cli/verify-magic-link', async (req, res) => {
       return sendResponse(res, 401, 'failure', null, 'Invalid or expired magic link');
     }
     
-    const linkData = JSON.parse(magicLinkData);
+    let linkData;
+    try {
+      linkData = typeof magicLinkData === 'string' ? JSON.parse(magicLinkData) : magicLinkData;
+    } catch (parseError) {
+      console.error('[cli] Error parsing magic link data:', parseError);
+      return sendResponse(res, 500, 'failure', null, 'Invalid magic link data format');
+    }
     
     // Check expiration
     if (Date.now() > linkData.expiresAt) {
