@@ -230,43 +230,63 @@ async function handleAdmin(token) {
     const url = `${baseUrl}/api/admin/info`;
     const data = await apiRequest('GET', url, null, token);
     
+    // Debug: log what we received
+    console.log('[cli-handler] Admin API response:', JSON.stringify(data, null, 2));
+    
     let output = 'Admin Information:\n\n';
+    let hasData = false;
+    
     if (data.email) {
       output += `Email: ${data.email}\n`;
+      hasData = true;
     }
     if (data.primaryRole) {
       output += `Primary Role: ${data.primaryRole}\n`;
+      hasData = true;
     }
-    if (data.roles && Array.isArray(data.roles)) {
+    if (data.roles && Array.isArray(data.roles) && data.roles.length > 0) {
       output += `Roles: ${data.roles.join(', ')}\n`;
+      hasData = true;
     }
-    if (data.permissions && Array.isArray(data.permissions)) {
+    if (data.permissions && Array.isArray(data.permissions) && data.permissions.length > 0) {
       output += `Permissions: ${data.permissions.join(', ')}\n`;
+      hasData = true;
     }
-    if (data.capabilities && Array.isArray(data.capabilities)) {
+    if (data.capabilities && Array.isArray(data.capabilities) && data.capabilities.length > 0) {
       output += `Capabilities: ${data.capabilities.join(', ')}\n`;
+      hasData = true;
     }
     if (data.stats) {
       output += `\nStats:\n`;
       if (data.stats.secretsCount !== undefined) {
         output += `  Secrets: ${data.stats.secretsCount}\n`;
+        hasData = true;
       }
       if (data.stats.ecosystemsCount !== undefined) {
         output += `  Ecosystems: ${data.stats.ecosystemsCount}\n`;
+        hasData = true;
       }
     }
     if (data.tokenInfo) {
       output += `\nToken Info:\n`;
       if (data.tokenInfo.clientId) {
         output += `  Client ID: ${data.tokenInfo.clientId}\n`;
+        hasData = true;
       }
       if (data.tokenInfo.expiresAt) {
         output += `  Expires: ${data.tokenInfo.expiresAt}\n`;
+        hasData = true;
       }
     }
     
-    return { output: output.trim() || JSON.stringify(data, null, 2) };
+    // If no expected fields found, show raw JSON for debugging
+    if (!hasData) {
+      output += `\nRaw API Response:\n${JSON.stringify(data, null, 2)}`;
+    }
+    
+    return { output: output.trim() };
   } catch (error) {
+    console.error('[cli-handler] Admin command error:', error);
     return { output: '', error: error.message };
   }
 }
