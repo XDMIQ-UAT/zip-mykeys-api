@@ -11,7 +11,7 @@
  * - Enables mesh connections for key/token/password management
  */
 
-const { getKV } = require('./server');
+const { getKV } = require('./kv-utils');
 const { getRingForEmail, getRing } = require('./ring-management');
 
 const REGISTRY_KEY = 'ring-registry';
