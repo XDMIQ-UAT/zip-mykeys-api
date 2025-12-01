@@ -378,26 +378,35 @@ app.get('/mcp-config-generator.html', (req, res) => {
   res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
   res.setHeader('Pragma', 'no-cache');
   res.setHeader('Expires', '0');
-  res.setHeader('X-Deployment-Verification', 'v2.1.0-deploy-verify');
+  res.setHeader('X-Deployment-Verification', 'v2.2.0-FORCE-UPDATE');
   const filePath = path.join(__dirname, 'public', 'mcp-config-generator.html');
   const fs = require('fs');
   
-  // Verify file exists and log details
-  if (fs.existsSync(filePath)) {
-    const stats = fs.statSync(filePath);
-    const fileContent = fs.readFileSync(filePath, 'utf8');
-    const hasDeploymentLog = fileContent.includes('Deployment Active');
-    console.log('[mcp-config-generator] File exists:', filePath);
-    console.log('[mcp-config-generator] File size:', stats.size, 'bytes');
-    console.log('[mcp-config-generator] Has deployment log:', hasDeploymentLog);
-    console.log('[mcp-config-generator] File modified:', stats.mtime);
-  } else {
-    console.error('[mcp-config-generator] File NOT FOUND:', filePath);
-    console.error('[mcp-config-generator] __dirname:', __dirname);
-    console.error('[mcp-config-generator] Current working directory:', process.cwd());
+  // Read and send file content directly to bypass any caching
+  try {
+    if (fs.existsSync(filePath)) {
+      const stats = fs.statSync(filePath);
+      const fileContent = fs.readFileSync(filePath, 'utf8');
+      const hasDeploymentLog = fileContent.includes('FORCE UPDATE TEST');
+      console.log('[mcp-config-generator] File exists:', filePath);
+      console.log('[mcp-config-generator] File size:', stats.size, 'bytes');
+      console.log('[mcp-config-generator] Has FORCE UPDATE log:', hasDeploymentLog);
+      console.log('[mcp-config-generator] File modified:', stats.mtime);
+      console.log('[mcp-config-generator] Content preview (first 200 chars):', fileContent.substring(0, 200));
+      
+      // Send content directly instead of using sendFile to bypass caching
+      res.setHeader('Content-Type', 'text/html; charset=utf-8');
+      res.send(fileContent);
+    } else {
+      console.error('[mcp-config-generator] File NOT FOUND:', filePath);
+      console.error('[mcp-config-generator] __dirname:', __dirname);
+      console.error('[mcp-config-generator] Current working directory:', process.cwd());
+      res.status(404).send('File not found');
+    }
+  } catch (error) {
+    console.error('[mcp-config-generator] Error reading file:', error);
+    res.status(500).send('Error loading file: ' + error.message);
   }
-  
-  res.sendFile(filePath);
 });
 
 app.get('/generate-token.html', (req, res) => {
