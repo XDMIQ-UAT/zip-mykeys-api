@@ -379,7 +379,8 @@ app.get('/mcp-config-generator.html', (req, res) => {
   res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
   res.setHeader('Pragma', 'no-cache');
   res.setHeader('Expires', '0');
-  res.setHeader('X-Deployment-Verification', 'v2.3.0-RESTORED');
+  res.setHeader('X-Deployment-Verification', 'v2.4.0-CACHE-BUST');
+  res.setHeader('ETag', `"${Date.now()}"`); // Force new ETag on every request
   const fs = require('fs');
   
   // Try multiple possible file paths
