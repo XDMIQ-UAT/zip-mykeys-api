@@ -419,12 +419,15 @@
         
         async function verifySession() {
             try {
+                // Include email for hash verification (privacy - email not stored server-side)
                 const response = await fetch(`${API_BASE}/api/cli/verify-session`, {
                     method: 'POST',
                     headers: {
                         'Authorization': `Bearer ${sessionToken}`,
-                        'Content-Type': 'application/json'
-                    }
+                        'Content-Type': 'application/json',
+                        'X-User-Email': userEmail || ''
+                    },
+                    body: JSON.stringify({ email: userEmail })
                 });
                 return response.ok;
             } catch (error) {
@@ -768,10 +771,26 @@ Note: All secret commands require an <ecosystem> parameter (e.g., "shared", "min
         
         async function verifyMagicLink(token) {
             try {
+                // Get email from URL or prompt user
+                // Email is required for privacy - we hash it and compare with magic link hash
+                const urlParams = new URLSearchParams(window.location.search);
+                let email = urlParams.get('email');
+                
+                // If email not in URL, get from input field or prompt
+                if (!email) {
+                    const emailInput = document.getElementById('emailInput');
+                    email = emailInput ? emailInput.value.trim() : null;
+                }
+                
+                if (!email) {
+                    showMessage(document.getElementById('loginMessage'), 'Email is required to verify magic link. Please enter your email address.', 'error');
+                    return;
+                }
+                
                 const response = await fetch(`${API_BASE}/api/cli/verify-magic-link`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ token })
+                    body: JSON.stringify({ token, email: email.trim().toLowerCase() })
                 });
                 
                 const data = await response.json();

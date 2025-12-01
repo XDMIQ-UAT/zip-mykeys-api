@@ -4195,10 +4195,11 @@ app.post('/api/cli/verify-magic-link', async (req, res) => {
 // Verify CLI session
 app.post('/api/cli/verify-session', authenticate, async (req, res) => {
   try {
-    // authenticate middleware sets req.userEmail and req.ringId
+    // authenticate middleware sets req.userEmail and req.ringId after email verification
+    // Email is NOT returned (privacy) - client already has it
     return sendResponse(res, 200, 'success', {
       valid: true,
-      email: req.userEmail,
+      // Email NOT returned - user must provide it (privacy)
       ringId: req.ringId
     });
   } catch (error) {
