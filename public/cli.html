@@ -587,9 +587,15 @@
                 return;
             }
             
-            // Send command to server
+            // Send command to server with timeout
             try {
-                const response = await fetch(`${API_BASE}/api/cli/execute`, {
+                // Create a timeout promise
+                const timeoutPromise = new Promise((_, reject) => 
+                    setTimeout(() => reject(new Error('Request timeout - command took too long to execute')), 30000)
+                );
+                
+                // Race between fetch and timeout
+                const fetchPromise = fetch(`${API_BASE}/api/cli/execute`, {
                     method: 'POST',
                     headers: {
                         'Authorization': `Bearer ${sessionToken}`,
@@ -597,6 +603,12 @@
                     },
                     body: JSON.stringify({ command })
                 });
+                
+                const response = await Promise.race([fetchPromise, timeoutPromise]);
+                
+                if (!response.ok && !response.json) {
+                    throw new Error(`HTTP ${response.status || 'Unknown error'}`);
+                }
                 
                 const data = await response.json();
                 
