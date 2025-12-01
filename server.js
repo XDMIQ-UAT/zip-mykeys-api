@@ -379,33 +379,53 @@ app.get('/mcp-config-generator.html', (req, res) => {
   res.setHeader('Pragma', 'no-cache');
   res.setHeader('Expires', '0');
   res.setHeader('X-Deployment-Verification', 'v2.2.0-FORCE-UPDATE');
-  const filePath = path.join(__dirname, 'public', 'mcp-config-generator.html');
   const fs = require('fs');
   
-  // Read and send file content directly to bypass any caching
-  try {
-    if (fs.existsSync(filePath)) {
-      const stats = fs.statSync(filePath);
-      const fileContent = fs.readFileSync(filePath, 'utf8');
-      const hasDeploymentLog = fileContent.includes('FORCE UPDATE TEST');
-      console.log('[mcp-config-generator] File exists:', filePath);
-      console.log('[mcp-config-generator] File size:', stats.size, 'bytes');
-      console.log('[mcp-config-generator] Has FORCE UPDATE log:', hasDeploymentLog);
-      console.log('[mcp-config-generator] File modified:', stats.mtime);
-      console.log('[mcp-config-generator] Content preview (first 200 chars):', fileContent.substring(0, 200));
-      
-      // Send content directly instead of using sendFile to bypass caching
-      res.setHeader('Content-Type', 'text/html; charset=utf-8');
-      res.send(fileContent);
-    } else {
-      console.error('[mcp-config-generator] File NOT FOUND:', filePath);
-      console.error('[mcp-config-generator] __dirname:', __dirname);
-      console.error('[mcp-config-generator] Current working directory:', process.cwd());
-      res.status(404).send('File not found');
+  // Try multiple possible file paths
+  const possiblePaths = [
+    path.join(__dirname, 'public', 'mcp-config-generator.html'),
+    path.join(process.cwd(), 'public', 'mcp-config-generator.html'),
+    path.join(__dirname, 'mcp-config-generator.html'),
+  ];
+  
+  let filePath = null;
+  let fileContent = null;
+  
+  // Find the file
+  for (const testPath of possiblePaths) {
+    if (fs.existsSync(testPath)) {
+      filePath = testPath;
+      try {
+        fileContent = fs.readFileSync(testPath, 'utf8');
+        const stats = fs.statSync(testPath);
+        const hasDeploymentLog = fileContent.includes('FORCE UPDATE TEST');
+        console.log('[mcp-config-generator] File found at:', testPath);
+        console.log('[mcp-config-generator] File size:', stats.size, 'bytes');
+        console.log('[mcp-config-generator] Has FORCE UPDATE log:', hasDeploymentLog);
+        console.log('[mcp-config-generator] __dirname:', __dirname);
+        console.log('[mcp-config-generator] process.cwd():', process.cwd());
+        break;
+      } catch (err) {
+        console.error('[mcp-config-generator] Error reading from', testPath, ':', err.message);
+      }
     }
-  } catch (error) {
-    console.error('[mcp-config-generator] Error reading file:', error);
-    res.status(500).send('Error loading file: ' + error.message);
+  }
+  
+  // Send response
+  if (fileContent) {
+    res.setHeader('Content-Type', 'text/html; charset=utf-8');
+    res.send(fileContent);
+  } else {
+    console.error('[mcp-config-generator] File NOT FOUND in any location');
+    console.error('[mcp-config-generator] Tried paths:', possiblePaths);
+    // Fallback: try express.static or send 404
+    const fallbackPath = path.join(__dirname, 'public', 'mcp-config-generator.html');
+    res.sendFile(fallbackPath, (err) => {
+      if (err) {
+        console.error('[mcp-config-generator] Fallback sendFile also failed:', err);
+        res.status(404).send('File not found. Check server logs for details.');
+      }
+    });
   }
 });
 
