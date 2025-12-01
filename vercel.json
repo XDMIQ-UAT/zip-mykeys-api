@@ -9,7 +9,12 @@
   "routes": [
     {
       "src": "/mcp-config-generator.html",
-      "dest": "/server.js"
+      "dest": "/server.js",
+      "headers": {
+        "Cache-Control": "no-cache, no-store, must-revalidate",
+        "Pragma": "no-cache",
+        "Expires": "0"
+      }
     },
     {
       "src": "/mcp-config-generator-v2.html",
