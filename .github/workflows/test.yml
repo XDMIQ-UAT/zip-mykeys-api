@@ -68,22 +68,16 @@ jobs:
         env:
           CI: true
       
-      - name: Start server
-        run: |
-          npm start &
-          sleep 10
-        env:
-          PORT: 8080
-          NODE_ENV: test
-          # Add minimal test env vars (tests should mock external services)
-          KV_REST_API_URL: ${{ secrets.KV_REST_API_URL || 'http://localhost:6379' }}
-          KV_REST_API_TOKEN: ${{ secrets.KV_REST_API_TOKEN || 'test-token' }}
-      
       - name: Run E2E tests
         run: npm test
         env:
           CI: true
           BASE_URL: http://localhost:8080
+          PORT: 8080
+          NODE_ENV: test
+          # Add minimal test env vars (tests should mock external services)
+          KV_REST_API_URL: ${{ secrets.KV_REST_API_URL || 'http://localhost:6379' }}
+          KV_REST_API_TOKEN: ${{ secrets.KV_REST_API_TOKEN || 'test-token' }}
       
       - name: Upload test results
         if: always()
