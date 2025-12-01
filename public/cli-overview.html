@@ -1,0 +1,294 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MyKeys CLI - Command Line Interface | MyKeys</title>
+    <meta name="description" content="Access MyKeys secrets management via command line. Choose between online web CLI or desktop CLI application.">
+    <script src="/shared-layout.js?v=3"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: #333;
+            line-height: 1.6;
+            min-height: 100vh;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 40px 20px;
+        }
+        
+        header {
+            text-align: center;
+            margin-bottom: 60px;
+            color: white;
+        }
+        
+        header h1 {
+            font-size: 3.5rem;
+            margin-bottom: 10px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.2);
+        }
+        
+        header p {
+            font-size: 1.3rem;
+            opacity: 0.95;
+        }
+        
+        .cli-options {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(500px, 1fr));
+            gap: 30px;
+            margin-bottom: 40px;
+        }
+        
+        .cli-card {
+            background: white;
+            border-radius: 20px;
+            padding: 40px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+        }
+        
+        .cli-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 15px 50px rgba(0,0,0,0.3);
+        }
+        
+        .cli-card h2 {
+            font-size: 2rem;
+            margin-bottom: 15px;
+            color: #667eea;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .cli-card .icon {
+            font-size: 2.5rem;
+        }
+        
+        .cli-card .badge {
+            display: inline-block;
+            padding: 5px 12px;
+            background: #667eea;
+            color: white;
+            border-radius: 20px;
+            font-size: 0.85rem;
+            font-weight: bold;
+            margin-bottom: 15px;
+        }
+        
+        .cli-card ul {
+            list-style: none;
+            margin: 20px 0;
+        }
+        
+        .cli-card ul li {
+            padding: 8px 0;
+            padding-left: 25px;
+            position: relative;
+        }
+        
+        .cli-card ul li:before {
+            content: "✓";
+            position: absolute;
+            left: 0;
+            color: #667eea;
+            font-weight: bold;
+        }
+        
+        .cli-card .cta-button {
+            display: inline-block;
+            margin-top: 20px;
+            padding: 15px 30px;
+            background: #667eea;
+            color: white;
+            text-decoration: none;
+            border-radius: 10px;
+            font-weight: bold;
+            transition: background 0.3s ease;
+        }
+        
+        .cli-card .cta-button:hover {
+            background: #5568d3;
+        }
+        
+        .cli-card .cta-button.secondary {
+            background: #764ba2;
+        }
+        
+        .cli-card .cta-button.secondary:hover {
+            background: #5d3a7e;
+        }
+        
+        .comparison {
+            background: white;
+            border-radius: 20px;
+            padding: 40px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+            margin-top: 40px;
+        }
+        
+        .comparison h2 {
+            font-size: 2rem;
+            margin-bottom: 30px;
+            color: #667eea;
+            text-align: center;
+        }
+        
+        .comparison-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+        }
+        
+        .comparison-table th,
+        .comparison-table td {
+            padding: 15px;
+            text-align: left;
+            border-bottom: 1px solid #eee;
+        }
+        
+        .comparison-table th {
+            background: #f8f9fa;
+            font-weight: bold;
+            color: #667eea;
+        }
+        
+        .comparison-table tr:hover {
+            background: #f8f9fa;
+        }
+        
+        .back-link {
+            display: inline-block;
+            margin-top: 30px;
+            color: white;
+            text-decoration: none;
+            opacity: 0.9;
+            transition: opacity 0.3s ease;
+        }
+        
+        .back-link:hover {
+            opacity: 1;
+        }
+        
+        @media (max-width: 768px) {
+            .cli-options {
+                grid-template-columns: 1fr;
+            }
+            
+            header h1 {
+                font-size: 2.5rem;
+            }
+            
+            .comparison-table {
+                font-size: 0.9rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🔐 MyKeys CLI</h1>
+            <p>Command Line Interface for Secrets Management</p>
+        </header>
+        
+        <div class="cli-options">
+            <div class="cli-card">
+                <span class="badge">Web-Based</span>
+                <h2><span class="icon">🌐</span> Online CLI</h2>
+                <p>Access MyKeys directly from your browser. No installation required - just log in and start managing secrets.</p>
+                
+                <ul>
+                    <li>No installation needed</li>
+                    <li>Works on any device with a browser</li>
+                    <li>Instant access from anywhere</li>
+                    <li>Magic link authentication</li>
+                    <li>Full terminal experience</li>
+                </ul>
+                
+                <a href="/cli.html" class="cta-button">Launch Online CLI →</a>
+            </div>
+            
+            <div class="cli-card">
+                <span class="badge">Desktop App</span>
+                <h2><span class="icon">💻</span> Desktop CLI</h2>
+                <p>Install the MyKeys CLI on your local machine for offline access and integration with your development workflow.</p>
+                
+                <ul>
+                    <li>Native desktop application</li>
+                    <li>Offline access to cached secrets</li>
+                    <li>Script integration support</li>
+                    <li>Faster performance</li>
+                    <li>System-level integration</li>
+                </ul>
+                
+                <a href="/cli-desktop.html" class="cta-button secondary">Learn More →</a>
+            </div>
+        </div>
+        
+        <div class="comparison">
+            <h2>Which CLI Should You Use?</h2>
+            <table class="comparison-table">
+                <thead>
+                    <tr>
+                        <th>Feature</th>
+                        <th>Online CLI</th>
+                        <th>Desktop CLI</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><strong>Setup</strong></td>
+                        <td>✅ Instant - just open in browser</td>
+                        <td>📦 Requires installation</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Access</strong></td>
+                        <td>🌐 Any device, anywhere</td>
+                        <td>💻 Single machine only</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Offline</strong></td>
+                        <td>❌ Requires internet</td>
+                        <td>✅ Works offline (cached secrets)</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Scripts</strong></td>
+                        <td>⚠️ Limited browser integration</td>
+                        <td>✅ Full shell integration</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Performance</strong></td>
+                        <td>⚡ Fast (depends on connection)</td>
+                        <td>⚡⚡ Very fast (local)</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Best For</strong></td>
+                        <td>Quick access, testing, demos</td>
+                        <td>Development, automation, CI/CD</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+        
+        <div style="text-align: center; margin-top: 30px;">
+            <a href="/tools.html" class="back-link">← Back to Tools</a>
+            <span style="color: white; margin: 0 15px;">|</span>
+            <a href="/" class="back-link">Back to Home</a>
+        </div>
+    </div>
+</body>
+</html>
+
