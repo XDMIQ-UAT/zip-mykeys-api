@@ -797,9 +797,12 @@ Note: All secret commands require an <ecosystem> parameter (e.g., "shared", "min
                 
                 if (response.ok && data.status === 'success') {
                     sessionToken = data.data.sessionToken;
-                    userEmail = data.data.email;
+                    // Email is NOT returned from server (privacy)
+                    // Store email locally - user must provide it in each request
+                    // Get email from the request we just sent
+                    userEmail = email.trim().toLowerCase(); // Use email from our request
                     localStorage.setItem('cliSessionToken', sessionToken);
-                    localStorage.setItem('cliUserEmail', userEmail);
+                    localStorage.setItem('cliUserEmail', userEmail); // Store locally for future requests
                     
                     // Clear URL
                     window.history.replaceState({}, document.title, '/cli.html');
