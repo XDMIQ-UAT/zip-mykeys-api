@@ -182,7 +182,7 @@ const authenticate = async (req, res, next) => {
         if (kv) {
           const sessionData = await kv.get(`cli:session:${token}`);
           if (sessionData) {
-            // Handle both string and object responses from KV
+            // Handle both string and object responses from storage
             const session = typeof sessionData === 'string' ? JSON.parse(sessionData) : sessionData;
             
             // Validate session structure
