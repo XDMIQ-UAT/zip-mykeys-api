@@ -25,7 +25,29 @@
       "dest": "/server.js"
     },
     {
-      "src": "/generate-token.html",
+      "src": "/tools",
+      "dest": "/server.js",
+      "headers": {
+        "Cache-Control": "no-cache, no-store, must-revalidate",
+        "Pragma": "no-cache",
+        "Expires": "0"
+      }
+    },
+    {
+      "src": "/tools.html",
+      "dest": "/server.js",
+      "headers": {
+        "Cache-Control": "no-cache, no-store, must-revalidate",
+        "Pragma": "no-cache",
+        "Expires": "0"
+      }
+    },
+    {
+      "src": "/cli-overview.html",
+      "dest": "/server.js"
+    },
+    {
+      "src": "/cli-desktop.html",
       "dest": "/server.js"
     },
     {
