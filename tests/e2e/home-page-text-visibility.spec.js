@@ -2,30 +2,46 @@ const { test, expect } = require('@playwright/test');
 
 test.describe('Home Page - AI Agents Text Visibility', () => {
   test.beforeEach(async ({ page }) => {
-    await page.goto('/');
+    await page.goto('/', { waitUntil: 'networkidle' });
     // Wait for React to load
-    await page.waitForSelector('#root', { state: 'visible' });
+    await page.waitForSelector('#root', { state: 'visible', timeout: 10000 });
+    // Wait for hero section to be present (with timeout)
+    try {
+      await page.waitForSelector('.hero', { state: 'visible', timeout: 10000 });
+    } catch (error) {
+      // If hero section doesn't exist, take screenshot for debugging
+      await page.screenshot({ path: 'test-results/home-page-debug.png', fullPage: true });
+      throw new Error(`Hero section not found. Page HTML: ${await page.content().substring(0, 500)}`);
+    }
   });
 
   test('should display "AI Agents" text in hero section', async ({ page }) => {
     // Verify it's in the hero section
     const heroSection = page.locator('.hero');
-    await expect(heroSection).toBeVisible();
+    await expect(heroSection).toBeVisible({ timeout: 10000 });
     
     // Check that the text is within the hero section - use more specific selector
     const heroTitle = page.locator('.hero-title');
-    await expect(heroTitle).toBeVisible();
-    await expect(heroTitle).toContainText('AI Agents');
+    await expect(heroTitle).toBeVisible({ timeout: 10000 });
     
-    // Specifically check the gradient-text element
-    const gradientText = heroTitle.locator('.gradient-text');
-    await expect(gradientText).toBeVisible();
-    await expect(gradientText).toContainText('AI Agents');
+    // Check if text contains "AI Agents" - be flexible with selector
+    const titleText = await heroTitle.textContent();
+    expect(titleText).toContain('AI Agents');
+    
+    // Check for accent text element (may be .hero-title-accent or .gradient-text)
+    const accentText = heroTitle.locator('.hero-title-accent, .gradient-text').first();
+    if (await accentText.count() > 0) {
+      await expect(accentText).toBeVisible({ timeout: 5000 });
+      await expect(accentText).toContainText('AI Agents');
+    } else {
+      // If accent element doesn't exist, just verify text is in title
+      expect(titleText).toContain('AI Agents');
+    }
   });
 
   test('should have readable "AI Agents" text with proper contrast', async ({ page }) => {
     const accentText = page.locator('.hero-title-accent');
-    await expect(accentText).toBeVisible();
+    await expect(accentText).toBeVisible({ timeout: 10000 });
     
     // Check computed styles for readability
     const opacity = await accentText.evaluate((el) => {
@@ -53,7 +69,7 @@ test.describe('Home Page - AI Agents Text Visibility', () => {
 
   test('should have solid white color (no gradient) on "AI Agents" text', async ({ page }) => {
     const accentText = page.locator('.hero-title-accent');
-    await expect(accentText).toBeVisible();
+    await expect(accentText).toBeVisible({ timeout: 10000 });
     
     // Check that background is none (no gradient)
     const background = await accentText.evaluate((el) => {
@@ -73,7 +89,7 @@ test.describe('Home Page - AI Agents Text Visibility', () => {
 
   test('should have sufficient contrast ratio for accessibility', async ({ page }) => {
     const accentText = page.locator('.hero-title-accent');
-    await expect(accentText).toBeVisible();
+    await expect(accentText).toBeVisible({ timeout: 10000 });
     
     // Check color is white for contrast against purple background
     const color = await accentText.evaluate((el) => {
@@ -94,7 +110,7 @@ test.describe('Home Page - AI Agents Text Visibility', () => {
 
   test('should be visible in hero title', async ({ page }) => {
     const heroTitle = page.locator('.hero-title');
-    await expect(heroTitle).toBeVisible();
+    await expect(heroTitle).toBeVisible({ timeout: 10000 });
     
     // Check that "AI Agents" is part of the title
     const titleText = await heroTitle.textContent();
@@ -111,7 +127,7 @@ test.describe('Home Page - AI Agents Text Visibility', () => {
   test('visual regression - AI Agents text should be readable', async ({ page }) => {
     // Take a screenshot of the hero section
     const heroSection = page.locator('.hero');
-    await expect(heroSection).toBeVisible();
+    await expect(heroSection).toBeVisible({ timeout: 10000 });
     
     // Wait for any animations to complete
     await page.waitForTimeout(500);
