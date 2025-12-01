@@ -938,18 +938,28 @@ app.post('/api/v1/secrets/:ecosystem', authenticate, async (req, res) => {
     // Track creator for visibility controls
     if (ringId) {
       const creatorEmail = userEmail || null;
-      await registerRingKey(ringId, secretName, secretValueStr, labels, creatorEmail);
+      try {
+        await registerRingKey(ringId, secretName, secretValueStr, labels, creatorEmail);
+      } catch (registerError) {
+        // Log but don't fail - secret is stored, registration is optional
+        console.error('[secret-storage] Error registering ring key (non-fatal):', registerError.message || registerError);
+      }
       
       // Audit log for AI agent actions
       if (req.isAgent && req.agentDelegatedBy) {
-        const { logAuditEvent } = require('./ring-management');
-        await logAuditEvent('key_created', {
-          ringId,
-          keyName: secretName,
-          performedBy: userEmail || req.token,
-          delegatedBy: req.agentDelegatedBy,
-          entityType: 'agent'
-        });
+        try {
+          const { logAuditEvent } = require('./ring-management');
+          await logAuditEvent('key_created', {
+            ringId,
+            keyName: secretName,
+            performedBy: userEmail || req.token,
+            delegatedBy: req.agentDelegatedBy,
+            entityType: 'agent'
+          });
+        } catch (auditError) {
+          // Log but don't fail - audit logging is optional
+          console.error('[secret-storage] Error logging audit event (non-fatal):', auditError.message || auditError);
+        }
       }
     }
     
@@ -961,16 +971,33 @@ app.post('/api/v1/secrets/:ecosystem', authenticate, async (req, res) => {
       message: `Secret ${secret_name} ${result.created ? 'created' : 'updated'} successfully. Content is accessible to all ring members.`
     });
   } catch (error) {
-    console.error(`Error storing secret ${req.params.ecosystem}:`, error.message);
-    // Ensure details is always a string
-    const errorDetails = typeof error.message === 'string' 
-      ? error.message 
-      : (typeof error === 'string' ? error : JSON.stringify(error));
+    console.error(`Error storing secret ${req.params.ecosystem}:`, error);
+    
+    // Safely extract error message, handling various error types
+    let errorMessage = 'Unknown error occurred';
+    try {
+      if (error && typeof error.message === 'string') {
+        errorMessage = error.message;
+      } else if (typeof error === 'string') {
+        errorMessage = error;
+      } else if (error && error.toString && error.toString() !== '[object Object]') {
+        errorMessage = error.toString();
+      } else {
+        // Last resort: try to stringify, but catch circular reference errors
+        try {
+          errorMessage = JSON.stringify(error);
+        } catch (stringifyError) {
+          errorMessage = 'Error occurred but could not be serialized';
+        }
+      }
+    } catch (extractError) {
+      errorMessage = 'Error occurred but details could not be extracted';
+    }
     
     res.status(500).json({ 
       error: 'Failed to store secret',
       message: 'Unable to save secret. Please try again or contact support if the issue persists.',
-      details: errorDetails
+      details: errorMessage
     });
   }
 });
