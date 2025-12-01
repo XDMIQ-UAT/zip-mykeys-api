@@ -962,10 +962,15 @@ app.post('/api/v1/secrets/:ecosystem', authenticate, async (req, res) => {
     });
   } catch (error) {
     console.error(`Error storing secret ${req.params.ecosystem}:`, error.message);
+    // Ensure details is always a string
+    const errorDetails = typeof error.message === 'string' 
+      ? error.message 
+      : (typeof error === 'string' ? error : JSON.stringify(error));
+    
     res.status(500).json({ 
       error: 'Failed to store secret',
       message: 'Unable to save secret. Please try again or contact support if the issue persists.',
-      details: error.message 
+      details: errorDetails
     });
   }
 });

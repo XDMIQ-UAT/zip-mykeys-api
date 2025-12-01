@@ -346,7 +346,13 @@ function apiRequest(method, url, body, token) {
           } else {
             // Build detailed error message
             const errorMsg = parsed.message || parsed.error || `HTTP ${res.statusCode}`;
-            const details = parsed.details ? `: ${parsed.details}` : '';
+            // Ensure details is always a string
+            let details = '';
+            if (parsed.details) {
+              details = typeof parsed.details === 'string' 
+                ? `: ${parsed.details}` 
+                : `: ${JSON.stringify(parsed.details)}`;
+            }
             reject(new Error(`${errorMsg}${details}`));
           }
         } catch (e) {
