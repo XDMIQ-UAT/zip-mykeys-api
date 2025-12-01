@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Desktop CLI Installation | MyKeys</title>
+    <meta name="description" content="Install and configure the MyKeys Desktop CLI for local secrets management.">
+    <script src="/shared-layout.js?v=3"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: #333;
+            line-height: 1.6;
+            min-height: 100vh;
+        }
+        
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 40px 20px;
+        }
+        
+        header {
+            text-align: center;
+            margin-bottom: 40px;
+            color: white;
+        }
+        
+        header h1 {
+            font-size: 3rem;
+            margin-bottom: 10px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.2);
+        }
+        
+        .content-card {
+            background: white;
+            border-radius: 20px;
+            padding: 40px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+            margin-bottom: 30px;
+        }
+        
+        .content-card h2 {
+            font-size: 2rem;
+            margin-bottom: 20px;
+            color: #667eea;
+        }
+        
+        .content-card h3 {
+            font-size: 1.5rem;
+            margin-top: 30px;
+            margin-bottom: 15px;
+            color: #764ba2;
+        }
+        
+        .content-card p {
+            margin-bottom: 15px;
+            color: #666;
+        }
+        
+        .content-card ul, .content-card ol {
+            margin: 15px 0;
+            padding-left: 30px;
+        }
+        
+        .content-card li {
+            margin: 8px 0;
+            color: #666;
+        }
+        
+        .code-block {
+            background: #1a1a1a;
+            color: #00ff00;
+            padding: 20px;
+            border-radius: 10px;
+            margin: 20px 0;
+            overflow-x: auto;
+            font-family: 'Courier New', monospace;
+            font-size: 0.9rem;
+            line-height: 1.6;
+        }
+        
+        .code-block code {
+            color: #00ff00;
+        }
+        
+        .warning-box {
+            background: #fff3cd;
+            border-left: 4px solid #ffc107;
+            padding: 15px;
+            margin: 20px 0;
+            border-radius: 5px;
+        }
+        
+        .info-box {
+            background: #d1ecf1;
+            border-left: 4px solid #0c5460;
+            padding: 15px;
+            margin: 20px 0;
+            border-radius: 5px;
+        }
+        
+        .back-link {
+            display: inline-block;
+            margin-top: 30px;
+            color: white;
+            text-decoration: none;
+            opacity: 0.9;
+            transition: opacity 0.3s ease;
+        }
+        
+        .back-link:hover {
+            opacity: 1;
+        }
+        
+        .cta-button {
+            display: inline-block;
+            margin-top: 20px;
+            padding: 15px 30px;
+            background: #667eea;
+            color: white;
+            text-decoration: none;
+            border-radius: 10px;
+            font-weight: bold;
+            transition: background 0.3s ease;
+        }
+        
+        .cta-button:hover {
+            background: #5568d3;
+        }
+        
+        @media (max-width: 768px) {
+            header h1 {
+                font-size: 2rem;
+            }
+            
+            .content-card {
+                padding: 20px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>💻 Desktop CLI</h1>
+            <p>Install MyKeys CLI on your local machine</p>
+        </header>
+        
+        <div class="content-card">
+            <h2>Quick Start</h2>
+            <p>The MyKeys Desktop CLI is currently in development. For now, use the <a href="/cli.html">Online CLI</a> which provides the same functionality directly in your browser.</p>
+            
+            <div class="info-box">
+                <strong>📢 Coming Soon:</strong> The desktop CLI will be available as a downloadable application for Windows, macOS, and Linux. It will provide offline access, script integration, and enhanced performance.
+            </div>
+            
+            <h3>What to Expect</h3>
+            <ul>
+                <li><strong>Native Installation:</strong> Install via npm, Homebrew, or direct download</li>
+                <li><strong>Offline Support:</strong> Cache secrets locally for offline access</li>
+                <li><strong>Shell Integration:</strong> Full integration with your terminal environment</li>
+                <li><strong>Script Support:</strong> Use in automation scripts and CI/CD pipelines</li>
+                <li><strong>Performance:</strong> Faster execution with local caching</li>
+            </ul>
+            
+            <h3>Current Alternative</h3>
+            <p>While the desktop CLI is being developed, you can use the Online CLI which provides:</p>
+            <ul>
+                <li>✅ All the same commands</li>
+                <li>✅ Magic link authentication</li>
+                <li>✅ Full secret management</li>
+                <li>✅ Works on any device</li>
+                <li>✅ No installation required</li>
+            </ul>
+            
+            <a href="/cli.html" class="cta-button">Try Online CLI →</a>
+        </div>
+        
+        <div class="content-card">
+            <h2>Installation (Coming Soon)</h2>
+            
+            <h3>Windows</h3>
+            <div class="code-block">
+<code># Via npm (when available)
+npm install -g @mykeys/cli
+
+# Or download installer
+# Download from mykeys.zip/cli/windows</code>
+            </div>
+            
+            <h3>macOS</h3>
+            <div class="code-block">
+<code># Via Homebrew (when available)
+brew install mykeys-cli
+
+# Or via npm
+npm install -g @mykeys/cli</code>
+            </div>
+            
+            <h3>Linux</h3>
+            <div class="code-block">
+<code># Via npm (when available)
+npm install -g @mykeys/cli
+
+# Or download binary
+# Download from mykeys.zip/cli/linux</code>
+            </div>
+        </div>
+        
+        <div class="content-card">
+            <h2>Features</h2>
+            
+            <h3>Security</h3>
+            <ul>
+                <li>Local credential storage (encrypted)</li>
+                <li>Device-based authentication</li>
+                <li>2FA support</li>
+                <li>Secure keychain integration</li>
+            </ul>
+            
+            <h3>Performance</h3>
+            <ul>
+                <li>Local caching for faster access</li>
+                <li>Offline mode for cached secrets</li>
+                <li>Reduced network latency</li>
+            </ul>
+            
+            <h3>Integration</h3>
+            <ul>
+                <li>Shell script support</li>
+                <li>CI/CD pipeline integration</li>
+                <li>Environment variable injection</li>
+                <li>Docker support</li>
+            </ul>
+        </div>
+        
+        <div style="text-align: center; margin-top: 30px;">
+            <a href="/cli-overview.html" class="back-link">← Back to CLI Options</a>
+            <span style="color: white; margin: 0 15px;">|</span>
+            <a href="/tools.html" class="back-link">Back to Tools</a>
+            <span style="color: white; margin: 0 15px;">|</span>
+            <a href="/" class="back-link">Back to Home</a>
+        </div>
+    </div>
+</body>
+</html>
+

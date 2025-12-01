@@ -6,6 +6,12 @@
     <title>Tools | MyKeys</title>
     <meta name="description" content="Developer tools and utilities for managing secrets and API access">
     <script src="/shared-layout.js?v=3"></script>
+    <script>
+        // Console message to verify this is the version with CLI card
+        console.log('%c🔐 MyKeys Tools Page - Version with CLI Card', 'color: #667eea; font-size: 16px; font-weight: bold; background: #000; padding: 5px;');
+        console.log('%c✅ This page includes the MyKeys CLI card', 'color: #10b981; font-size: 14px;');
+        console.log('Page loaded at:', new Date().toISOString());
+    </script>
     <style>
         * {
             margin: 0;
@@ -145,6 +151,9 @@
         <header>
             <h1>🛠️ Developer Tools</h1>
             <p>Tools and utilities for managing secrets and API access</p>
+            <p style="font-size: 0.9rem; opacity: 0.8; margin-top: 10px;">
+                ✅ Version with CLI Card - Check console for verification
+            </p>
         </header>
         
         <div class="tools-grid">
@@ -153,7 +162,10 @@
                 <div class="icon">🔐</div>
                 <h2>MyKeys CLI</h2>
                 <p>Command-line interface for managing secrets. Choose between online web CLI or install the desktop version for local development and automation.</p>
-                <a href="/cli-overview.html" class="cta-button">View CLI Options →</a>
+                <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+                    <a href="/cli.html" class="cta-button" style="flex: 1; min-width: 140px;">Launch CLI →</a>
+                    <a href="/cli-overview.html" class="cta-button" style="flex: 1; min-width: 140px; background: #764ba2;">View Options →</a>
+                </div>
             </div>
             
             <div class="tool-card">
