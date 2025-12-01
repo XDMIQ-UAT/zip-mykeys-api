@@ -4367,6 +4367,10 @@ app.get('/cli-overview.html', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'cli-overview.html'));
 });
 
+app.get('/cli-desktop.html', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'cli-desktop.html'));
+});
+
 // Load modular routes from routes directory
 try {
   const { loadRoutes } = require('./routes');
@@ -4395,6 +4399,7 @@ app.get('*', (req, res, next) => {
       req.path === '/tools.html' ||
       req.path === '/cli.html' ||
       req.path === '/cli-overview.html' ||
+      req.path === '/cli-desktop.html' ||
       req.path.endsWith('.html')) {
     return next();
   }
