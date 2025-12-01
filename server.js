@@ -603,6 +603,7 @@ app.get('/rebuild', (req, res) => {
 });
 
 app.get('/rebuild.html', (req, res) => {
+  setNoCacheHeaders(res);
   const filePath = path.join(__dirname, 'public', 'rebuild.html');
   res.sendFile(filePath, (err) => {
     if (err) {
