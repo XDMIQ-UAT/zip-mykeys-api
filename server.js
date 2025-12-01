@@ -176,6 +176,34 @@ const authenticate = async (req, res, next) => {
         // Continue to MCP token check
       }
 
+      // Try CLI session token first
+      try {
+        const kv = getKV();
+        if (kv) {
+          const sessionData = await kv.get(`cli:session:${token}`);
+          if (sessionData) {
+            const session = JSON.parse(sessionData);
+            
+            // Check expiration
+            if (Date.now() > session.expiresAt) {
+              await kv.del(`cli:session:${token}`);
+              return sendResponse(res, 401, 'failure', null, 'Session expired');
+            }
+            
+            // Update last activity
+            session.lastActivity = Date.now();
+            await kv.set(`cli:session:${token}`, JSON.stringify(session), { ex: 86400 });
+            
+            req.authType = 'cli-session';
+            req.userEmail = session.email;
+            req.ringId = await getRingForUser(session.email, true);
+            return next();
+          }
+        }
+      } catch (err) {
+        // Continue to MCP token check
+      }
+
       // Try MCP token
       try {
         const validation = await validateMCPToken(token);
@@ -3819,6 +3847,251 @@ app.use((req, res, next) => {
   } else {
     // For non-API routes, let express.static handle it (or return 404 for missing files)
     next();
+  }
+});
+
+// ============================================================================
+// CLI Online Interface Endpoints
+// ============================================================================
+
+// Generate and send magic link for CLI login
+app.post('/api/cli/send-magic-link', async (req, res) => {
+  try {
+    const { email } = req.body;
+    
+    if (!email) {
+      return sendResponse(res, 400, 'failure', null, 'Email is required');
+    }
+    
+    const normalizedEmail = email.trim().toLowerCase();
+    
+    // Generate magic link token (cryptographically secure)
+    const magicToken = crypto.randomBytes(32).toString('hex');
+    const expiresAt = Date.now() + (15 * 60 * 1000); // 15 minutes
+    
+    const kv = getKV();
+    if (!kv) {
+      return sendResponse(res, 500, 'failure', null, 'Storage unavailable');
+    }
+    
+    // Store magic link token
+    await kv.set(`cli:magic-link:${magicToken}`, JSON.stringify({
+      email: normalizedEmail,
+      expiresAt,
+      createdAt: Date.now()
+    }), { ex: 900 }); // 15 minutes expiry
+    
+    // Generate magic link URL
+    const baseUrl = req.protocol + '://' + req.get('host');
+    const magicLink = `${baseUrl}/cli.html?token=${magicToken}`;
+    
+    // Send magic link email
+    try {
+      const emailHtml = `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>MyKeys CLI Magic Link</title>
+</head>
+<body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
+  <div style="max-width: 600px; margin: 0 auto; padding: 20px;">
+    <h1 style="color: #667eea;">MyKeys CLI Access</h1>
+    <p>Click the link below to sign in to your MyKeys CLI:</p>
+    <p style="margin: 30px 0;">
+      <a href="${magicLink}" style="background: #667eea; color: white; padding: 12px 24px; text-decoration: none; border-radius: 4px; display: inline-block;">
+        Sign in to MyKeys CLI
+      </a>
+    </p>
+    <p style="color: #666; font-size: 14px;">
+      Or copy and paste this link into your browser:<br>
+      <code style="background: #f5f5f5; padding: 4px 8px; border-radius: 2px; word-break: break-all;">${magicLink}</code>
+    </p>
+    <p style="color: #999; font-size: 12px; margin-top: 30px;">
+      This link will expire in 15 minutes. If you didn't request this link, you can safely ignore this email.
+    </p>
+  </div>
+</body>
+</html>
+      `.trim();
+      
+      const emailText = `
+MyKeys CLI Access
+
+Click the link below to sign in to your MyKeys CLI:
+
+${magicLink}
+
+This link will expire in 15 minutes. If you didn't request this link, you can safely ignore this email.
+      `.trim();
+      
+      // Send magic link email using SES
+      try {
+        const { SESClient, SendEmailCommand } = require('@aws-sdk/client-ses');
+        const sesClient = new SESClient({
+          region: process.env.AWS_REGION || 'us-east-1',
+          credentials: {
+            accessKeyId: process.env.AWS_ACCESS_KEY_ID,
+            secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY
+          }
+        });
+        
+        await sesClient.send(new SendEmailCommand({
+          Source: process.env.SES_SENDER_EMAIL || 'hello@cosmiciq.org',
+          Destination: { ToAddresses: [normalizedEmail] },
+          Message: {
+            Subject: { Data: 'MyKeys CLI Magic Link', Charset: 'UTF-8' },
+            Body: {
+              Html: { Data: emailHtml, Charset: 'UTF-8' },
+              Text: { Data: emailText, Charset: 'UTF-8' }
+            }
+          }
+        }));
+        
+        console.log(`[cli] Magic link email sent to ${normalizedEmail}`);
+      } catch (emailError) {
+        console.error('[cli] Failed to send magic link email:', emailError);
+        // Continue - token is stored, user can check logs or use token directly
+      }
+      
+      return sendResponse(res, 200, 'success', {
+        message: 'Magic link sent to your email'
+      });
+    } catch (emailError) {
+      console.error('[cli] Failed to send magic link email:', emailError);
+      // Still return success - token is stored, user can check logs
+      return sendResponse(res, 200, 'success', {
+        message: 'Magic link generated (email may have failed)',
+        token: magicToken, // For testing - remove in production
+        link: magicLink
+      });
+    }
+  } catch (error) {
+    console.error('[cli] Error generating magic link:', error);
+    return sendResponse(res, 500, 'failure', null, error.message);
+  }
+});
+
+// Verify magic link and create CLI session
+app.post('/api/cli/verify-magic-link', async (req, res) => {
+  try {
+    const { token } = req.body;
+    
+    if (!token) {
+      return sendResponse(res, 400, 'failure', null, 'Token is required');
+    }
+    
+    const kv = getKV();
+    if (!kv) {
+      return sendResponse(res, 500, 'failure', null, 'Storage unavailable');
+    }
+    
+    // Get magic link data
+    const magicLinkData = await kv.get(`cli:magic-link:${token}`);
+    
+    if (!magicLinkData) {
+      return sendResponse(res, 401, 'failure', null, 'Invalid or expired magic link');
+    }
+    
+    const linkData = JSON.parse(magicLinkData);
+    
+    // Check expiration
+    if (Date.now() > linkData.expiresAt) {
+      await kv.del(`cli:magic-link:${token}`);
+      return sendResponse(res, 401, 'failure', null, 'Magic link has expired');
+    }
+    
+    // Delete magic link (one-time use)
+    await kv.del(`cli:magic-link:${token}`);
+    
+    // Generate CLI session token
+    const sessionToken = crypto.randomBytes(32).toString('hex');
+    const sessionExpiresAt = Date.now() + (24 * 60 * 60 * 1000); // 24 hours
+    
+    // Store session
+    await kv.set(`cli:session:${sessionToken}`, JSON.stringify({
+      email: linkData.email,
+      createdAt: Date.now(),
+      expiresAt: sessionExpiresAt,
+      lastActivity: Date.now()
+    }), { ex: 86400 }); // 24 hours
+    
+    // Get user's ring for isolation
+    const ringId = await getRingForUser(linkData.email, true);
+    
+    return sendResponse(res, 200, 'success', {
+      sessionToken,
+      email: linkData.email,
+      ringId
+    });
+  } catch (error) {
+    console.error('[cli] Error verifying magic link:', error);
+    return sendResponse(res, 500, 'failure', null, error.message);
+  }
+});
+
+// Verify CLI session
+app.post('/api/cli/verify-session', authenticate, async (req, res) => {
+  try {
+    // authenticate middleware sets req.userEmail and req.ringId
+    return sendResponse(res, 200, 'success', {
+      valid: true,
+      email: req.userEmail,
+      ringId: req.ringId
+    });
+  } catch (error) {
+    return sendResponse(res, 401, 'failure', null, 'Invalid session');
+  }
+});
+
+// Execute CLI command
+app.post('/api/cli/execute', authenticate, async (req, res) => {
+  try {
+    const { command } = req.body;
+    const userEmail = req.userEmail;
+    const ringId = req.ringId;
+    
+    if (!command) {
+      return sendResponse(res, 400, 'failure', null, 'Command is required');
+    }
+    
+    // Parse command
+    const parts = command.trim().split(/\s+/);
+    const cmd = parts[0];
+    const args = parts.slice(1);
+    
+    let output = '';
+    let error = null;
+    
+    // Handle mykeys commands
+    if (cmd === 'mykeys' || cmd.startsWith('mykeys')) {
+      const mykeysCmd = parts[1] || 'help';
+      
+      try {
+        // Import CLI handler
+        const { executeCLICommand } = require('./cli-handler');
+        const result = await executeCLICommand(mykeysCmd, args, {
+          email: userEmail,
+          ringId,
+          token: req.headers.authorization?.replace('Bearer ', '')
+        });
+        
+        output = result.output || '';
+        error = result.error || null;
+      } catch (cmdError) {
+        error = cmdError.message;
+      }
+    } else {
+      output = `Command '${cmd}' not found. Type 'help' for available commands.`;
+    }
+    
+    return sendResponse(res, 200, 'success', {
+      output,
+      error
+    });
+  } catch (error) {
+    console.error('[cli] Error executing command:', error);
+    return sendResponse(res, 500, 'failure', null, error.message);
   }
 });
 

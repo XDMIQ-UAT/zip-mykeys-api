@@ -1,0 +1,655 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MyKeys CLI - Online Terminal</title>
+    <script src="/shared-layout.js?v=3"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Courier New', 'Consolas', 'Monaco', monospace;
+            background: #000;
+            color: #00ff00;
+            overflow: hidden;
+            height: 100vh;
+        }
+        
+        body.has-shared-layout {
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+        }
+        
+        /* Hide header/footer for CLI */
+        body.has-shared-layout .header,
+        body.has-shared-layout .footer {
+            display: none !important;
+        }
+        
+        .main-content {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            background: #000;
+        }
+        
+        /* Terminal Container */
+        .terminal-container {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            background: #000;
+            padding: 20px;
+            overflow: hidden;
+        }
+        
+        /* Terminal Header */
+        .terminal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px 20px;
+            background: #1a1a1a;
+            border-bottom: 1px solid #333;
+            margin: -20px -20px 20px -20px;
+        }
+        
+        .terminal-title {
+            color: #00ff00;
+            font-weight: bold;
+            font-size: 14px;
+        }
+        
+        .terminal-controls {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
+        
+        .theme-selector {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+        }
+        
+        .theme-selector label {
+            color: #888;
+            font-size: 12px;
+        }
+        
+        .theme-selector select {
+            background: #1a1a1a;
+            color: #00ff00;
+            border: 1px solid #333;
+            padding: 4px 8px;
+            font-family: monospace;
+            font-size: 12px;
+            cursor: pointer;
+        }
+        
+        .theme-selector select:focus {
+            outline: 1px solid #00ff00;
+        }
+        
+        .logout-btn {
+            background: #333;
+            color: #ff4444;
+            border: 1px solid #555;
+            padding: 4px 12px;
+            font-family: monospace;
+            font-size: 12px;
+            cursor: pointer;
+        }
+        
+        .logout-btn:hover {
+            background: #444;
+        }
+        
+        /* Terminal Output */
+        .terminal-output {
+            flex: 1;
+            overflow-y: auto;
+            padding: 10px;
+            font-size: 14px;
+            line-height: 1.5;
+            background: #000;
+        }
+        
+        .terminal-line {
+            margin-bottom: 2px;
+            word-wrap: break-word;
+            white-space: pre-wrap;
+        }
+        
+        .terminal-prompt {
+            color: #00ff00;
+        }
+        
+        .terminal-input-line {
+            display: flex;
+            align-items: center;
+            margin-top: 5px;
+        }
+        
+        .terminal-prompt-text {
+            color: #00ff00;
+            margin-right: 8px;
+        }
+        
+        .terminal-input {
+            flex: 1;
+            background: transparent;
+            border: none;
+            color: #00ff00;
+            font-family: 'Courier New', 'Consolas', 'Monaco', monospace;
+            font-size: 14px;
+            outline: none;
+            caret-color: #00ff00;
+        }
+        
+        /* Login Screen */
+        .login-screen {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            background: #000;
+            color: #00ff00;
+        }
+        
+        .login-box {
+            background: #1a1a1a;
+            border: 1px solid #333;
+            padding: 40px;
+            border-radius: 4px;
+            max-width: 500px;
+            width: 90%;
+        }
+        
+        .login-box h1 {
+            margin-bottom: 20px;
+            font-size: 24px;
+            text-align: center;
+        }
+        
+        .login-box p {
+            margin-bottom: 20px;
+            color: #888;
+            text-align: center;
+        }
+        
+        .login-form {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+        
+        .login-form input {
+            background: #000;
+            border: 1px solid #333;
+            color: #00ff00;
+            padding: 12px;
+            font-family: monospace;
+            font-size: 14px;
+        }
+        
+        .login-form input:focus {
+            outline: 1px solid #00ff00;
+        }
+        
+        .login-form button {
+            background: #00ff00;
+            color: #000;
+            border: none;
+            padding: 12px;
+            font-family: monospace;
+            font-size: 14px;
+            font-weight: bold;
+            cursor: pointer;
+        }
+        
+        .login-form button:hover {
+            background: #00cc00;
+        }
+        
+        .login-form button:disabled {
+            background: #333;
+            color: #666;
+            cursor: not-allowed;
+        }
+        
+        .error-message {
+            color: #ff4444;
+            margin-top: 10px;
+            font-size: 12px;
+        }
+        
+        .success-message {
+            color: #00ff00;
+            margin-top: 10px;
+            font-size: 12px;
+        }
+        
+        /* Terminal Themes */
+        body.theme-mac {
+            --terminal-bg: #1e1e1e;
+            --terminal-fg: #ffffff;
+            --terminal-prompt: #00ff00;
+            --terminal-header-bg: #2d2d2d;
+        }
+        
+        body.theme-linux {
+            --terminal-bg: #000000;
+            --terminal-fg: #00ff00;
+            --terminal-prompt: #00ff00;
+            --terminal-header-bg: #1a1a1a;
+        }
+        
+        body.theme-windows {
+            --terminal-bg: #0c0c0c;
+            --terminal-fg: #cccccc;
+            --terminal-prompt: #00ff00;
+            --terminal-header-bg: #1a1a1a;
+        }
+        
+        body.theme-mac .terminal-container {
+            background: var(--terminal-bg);
+            color: var(--terminal-fg);
+        }
+        
+        body.theme-mac .terminal-prompt {
+            color: var(--terminal-prompt);
+        }
+        
+        body.theme-linux .terminal-container {
+            background: var(--terminal-bg);
+            color: var(--terminal-fg);
+        }
+        
+        body.theme-windows .terminal-container {
+            background: var(--terminal-bg);
+            color: var(--terminal-fg);
+        }
+    </style>
+</head>
+<body class="has-shared-layout theme-linux">
+    <div id="shared-header"></div>
+    <div class="main-content">
+        <!-- Login Screen -->
+        <div id="loginScreen" class="login-screen">
+            <div class="login-box">
+                <h1>MyKeys CLI</h1>
+                <p>Enter your email to receive a magic link</p>
+                <form id="loginForm" class="login-form">
+                    <input type="email" id="emailInput" placeholder="your.email@example.com" required autofocus>
+                    <button type="submit" id="sendLinkBtn">Send Magic Link</button>
+                    <div id="loginMessage"></div>
+                </form>
+            </div>
+        </div>
+        
+        <!-- Terminal Interface -->
+        <div id="terminalScreen" class="terminal-container" style="display: none;">
+            <div class="terminal-header">
+                <div class="terminal-title">MyKeys CLI v1.0.0</div>
+                <div class="terminal-controls">
+                    <div class="theme-selector">
+                        <label>Theme:</label>
+                        <select id="themeSelect">
+                            <option value="linux">Linux</option>
+                            <option value="mac">macOS</option>
+                            <option value="windows">Windows</option>
+                        </select>
+                    </div>
+                    <button class="logout-btn" id="logoutBtn">Logout</button>
+                </div>
+            </div>
+            
+            <div class="terminal-output" id="terminalOutput">
+                <div class="terminal-line">
+                    <span class="terminal-prompt">Welcome to MyKeys CLI</span>
+                </div>
+                <div class="terminal-line">
+                    <span class="terminal-prompt">Type 'help' for available commands</span>
+                </div>
+            </div>
+            
+            <div class="terminal-input-line">
+                <span class="terminal-prompt-text" id="promptText">mykeys@online:~$</span>
+                <input type="text" class="terminal-input" id="terminalInput" autocomplete="off" spellcheck="false">
+            </div>
+        </div>
+    </div>
+    <div id="shared-footer"></div>
+    
+    <script>
+        const API_BASE = window.MYKEYS_URL || (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
+            ? 'https://mykeys.zip'
+            : '';
+        
+        let sessionToken = localStorage.getItem('cliSessionToken');
+        let userEmail = localStorage.getItem('cliUserEmail');
+        let userPreferences = JSON.parse(localStorage.getItem('cliUserPreferences') || '{}');
+        let commandHistory = JSON.parse(localStorage.getItem('cliCommandHistory') || '[]');
+        let historyIndex = -1;
+        
+        // Initialize
+        document.addEventListener('DOMContentLoaded', () => {
+            setupEventListeners();
+            checkSession();
+            loadTheme();
+        });
+        
+        function setupEventListeners() {
+            // Login form
+            document.getElementById('loginForm').addEventListener('submit', handleLogin);
+            
+            // Terminal input
+            const terminalInput = document.getElementById('terminalInput');
+            terminalInput.addEventListener('keydown', handleTerminalInput);
+            terminalInput.addEventListener('keyup', (e) => {
+                if (e.key === 'Enter') {
+                    terminalInput.value = '';
+                }
+            });
+            
+            // Theme selector
+            document.getElementById('themeSelect').addEventListener('change', (e) => {
+                setTheme(e.target.value);
+            });
+            
+            // Logout
+            document.getElementById('logoutBtn').addEventListener('click', handleLogout);
+        }
+        
+        function checkSession() {
+            if (sessionToken && userEmail) {
+                // Verify session is still valid
+                verifySession().then(valid => {
+                    if (valid) {
+                        showTerminal();
+                    } else {
+                        clearSession();
+                    }
+                });
+            }
+        }
+        
+        async function verifySession() {
+            try {
+                const response = await fetch(`${API_BASE}/api/cli/verify-session`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${sessionToken}`,
+                        'Content-Type': 'application/json'
+                    }
+                });
+                return response.ok;
+            } catch (error) {
+                return false;
+            }
+        }
+        
+        async function handleLogin(e) {
+            e.preventDefault();
+            const email = document.getElementById('emailInput').value.trim();
+            const sendBtn = document.getElementById('sendLinkBtn');
+            const messageDiv = document.getElementById('loginMessage');
+            
+            if (!email) {
+                showMessage(messageDiv, 'Please enter your email address', 'error');
+                return;
+            }
+            
+            sendBtn.disabled = true;
+            sendBtn.textContent = 'Sending...';
+            messageDiv.innerHTML = '';
+            
+            try {
+                const response = await fetch(`${API_BASE}/api/cli/send-magic-link`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ email })
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok && data.status === 'success') {
+                    showMessage(messageDiv, `Magic link sent to ${email}. Check your email and click the link to sign in.`, 'success');
+                    sendBtn.textContent = 'Link Sent ✓';
+                } else {
+                    showMessage(messageDiv, data.message || 'Failed to send magic link', 'error');
+                    sendBtn.disabled = false;
+                    sendBtn.textContent = 'Send Magic Link';
+                }
+            } catch (error) {
+                showMessage(messageDiv, 'Error: ' + error.message, 'error');
+                sendBtn.disabled = false;
+                sendBtn.textContent = 'Send Magic Link';
+            }
+        }
+        
+        function showMessage(div, message, type) {
+            div.className = type === 'error' ? 'error-message' : 'success-message';
+            div.textContent = message;
+        }
+        
+        function showTerminal() {
+            document.getElementById('loginScreen').style.display = 'none';
+            document.getElementById('terminalScreen').style.display = 'flex';
+            document.getElementById('terminalInput').focus();
+            updatePrompt();
+        }
+        
+        function updatePrompt() {
+            const promptText = document.getElementById('promptText');
+            const platform = userPreferences.platform || 'linux';
+            const username = userEmail ? userEmail.split('@')[0] : 'user';
+            
+            if (platform === 'mac') {
+                promptText.textContent = `${username}@mykeys %`;
+            } else if (platform === 'windows') {
+                promptText.textContent = `C:\\Users\\${username}>`;
+            } else {
+                promptText.textContent = `mykeys@${username}:~$`;
+            }
+        }
+        
+        async function handleTerminalInput(e) {
+            if (e.key === 'Enter') {
+                const command = e.target.value.trim();
+                if (command) {
+                    addToHistory(command);
+                    await executeCommand(command);
+                }
+            } else if (e.key === 'ArrowUp') {
+                e.preventDefault();
+                if (commandHistory.length > 0) {
+                    historyIndex = Math.min(historyIndex + 1, commandHistory.length - 1);
+                    e.target.value = commandHistory[commandHistory.length - 1 - historyIndex];
+                }
+            } else if (e.key === 'ArrowDown') {
+                e.preventDefault();
+                if (historyIndex > 0) {
+                    historyIndex--;
+                    e.target.value = commandHistory[commandHistory.length - 1 - historyIndex];
+                } else {
+                    historyIndex = -1;
+                    e.target.value = '';
+                }
+            }
+        }
+        
+        function addToHistory(command) {
+            commandHistory.push(command);
+            if (commandHistory.length > 100) {
+                commandHistory.shift();
+            }
+            localStorage.setItem('cliCommandHistory', JSON.stringify(commandHistory));
+            historyIndex = -1;
+        }
+        
+        async function executeCommand(command) {
+            const output = document.getElementById('terminalOutput');
+            const inputLine = document.createElement('div');
+            inputLine.className = 'terminal-line';
+            inputLine.innerHTML = `<span class="terminal-prompt">${document.getElementById('promptText').textContent}</span> ${command}`;
+            output.appendChild(inputLine);
+            
+            // Handle local commands
+            if (command === 'help') {
+                showHelp(output);
+                return;
+            }
+            
+            if (command === 'clear' || command === 'cls') {
+                output.innerHTML = '';
+                return;
+            }
+            
+            if (command.startsWith('theme ')) {
+                const theme = command.split(' ')[1];
+                if (['linux', 'mac', 'windows'].includes(theme)) {
+                    setTheme(theme);
+                    addOutput(output, `Theme changed to ${theme}`);
+                } else {
+                    addOutput(output, `Invalid theme. Available: linux, mac, windows`, 'error');
+                }
+                return;
+            }
+            
+            // Send command to server
+            try {
+                const response = await fetch(`${API_BASE}/api/cli/execute`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${sessionToken}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ command })
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok && data.status === 'success') {
+                    if (data.data.output) {
+                        addOutput(output, data.data.output);
+                    }
+                    if (data.data.error) {
+                        addOutput(output, data.data.error, 'error');
+                    }
+                } else {
+                    addOutput(output, data.message || 'Command failed', 'error');
+                }
+            } catch (error) {
+                addOutput(output, `Error: ${error.message}`, 'error');
+            }
+            
+            output.scrollTop = output.scrollHeight;
+        }
+        
+        function showHelp(output) {
+            const helpText = `
+Available commands:
+  help              Show this help message
+  clear / cls       Clear terminal
+  theme <name>      Change theme (linux, mac, windows)
+  
+MyKeys commands:
+  mykeys list       List all secrets
+  mykeys get <key>  Get a secret value
+  mykeys set <key> <value>  Set a secret value
+  mykeys delete <key>  Delete a secret
+  mykeys admin      Show admin information
+            `.trim();
+            addOutput(output, helpText);
+        }
+        
+        function addOutput(container, text, type = 'normal') {
+            const line = document.createElement('div');
+            line.className = 'terminal-line';
+            if (type === 'error') {
+                line.style.color = '#ff4444';
+            }
+            line.textContent = text;
+            container.appendChild(line);
+        }
+        
+        function setTheme(theme) {
+            document.body.className = `has-shared-layout theme-${theme}`;
+            userPreferences.platform = theme;
+            userPreferences.theme = theme;
+            localStorage.setItem('cliUserPreferences', JSON.stringify(userPreferences));
+            document.getElementById('themeSelect').value = theme;
+            updatePrompt();
+        }
+        
+        function loadTheme() {
+            const savedTheme = userPreferences.theme || 'linux';
+            setTheme(savedTheme);
+        }
+        
+        function handleLogout() {
+            clearSession();
+            document.getElementById('loginScreen').style.display = 'flex';
+            document.getElementById('terminalScreen').style.display = 'none';
+            document.getElementById('emailInput').value = '';
+            document.getElementById('loginMessage').innerHTML = '';
+        }
+        
+        function clearSession() {
+            localStorage.removeItem('cliSessionToken');
+            localStorage.removeItem('cliUserEmail');
+            sessionToken = null;
+            userEmail = null;
+        }
+        
+        // Check for magic link token in URL
+        const urlParams = new URLSearchParams(window.location.search);
+        const magicToken = urlParams.get('token');
+        if (magicToken) {
+            verifyMagicLink(magicToken);
+        }
+        
+        async function verifyMagicLink(token) {
+            try {
+                const response = await fetch(`${API_BASE}/api/cli/verify-magic-link`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ token })
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok && data.status === 'success') {
+                    sessionToken = data.data.sessionToken;
+                    userEmail = data.data.email;
+                    localStorage.setItem('cliSessionToken', sessionToken);
+                    localStorage.setItem('cliUserEmail', userEmail);
+                    
+                    // Clear URL
+                    window.history.replaceState({}, document.title, '/cli.html');
+                    
+                    showTerminal();
+                    const output = document.getElementById('terminalOutput');
+                    addOutput(output, `Welcome back, ${userEmail}!`);
+                    addOutput(output, 'Type "help" for available commands.');
+                } else {
+                    showMessage(document.getElementById('loginMessage'), data.message || 'Invalid or expired magic link', 'error');
+                }
+            } catch (error) {
+                showMessage(document.getElementById('loginMessage'), 'Error verifying magic link: ' + error.message, 'error');
+            }
+        }
+    </script>
+</body>
+</html>
+
