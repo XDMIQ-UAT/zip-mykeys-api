@@ -606,8 +606,9 @@
                 
                 const response = await Promise.race([fetchPromise, timeoutPromise]);
                 
-                if (!response.ok && !response.json) {
-                    throw new Error(`HTTP ${response.status || 'Unknown error'}`);
+                // Check if response is valid (not a timeout error)
+                if (!response || !response.json) {
+                    throw new Error('Request timeout - command took too long to execute');
                 }
                 
                 const data = await response.json();
