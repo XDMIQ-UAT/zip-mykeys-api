@@ -324,18 +324,20 @@ async function getRingForUser(email = null, createAnonymous = true) {
         const { createRing } = require('./ring-management');
         const userRingId = `ring-${email.replace(/[^a-z0-9]/g, '-')}-${Date.now()}`;
         const ring = await createRing(userRingId, email, {
-          [email]: ['admin'] // User is admin of their own ring
+          [email]: 'admin' // User is admin of their own ring (string format, will be normalized)
         });
         
         // Try to register in registry (non-blocking, don't fail if this errors)
         // Registration is optional - the ring is already created and functional
-        registerRing(userRingId, {
-          publicName: email.split('@')[0], // Use username part as public name
-          capabilities: ['key-management', 'token-management'],
-        }).catch(regError => {
+        try {
+          await registerRing(userRingId, {
+            publicName: email.split('@')[0], // Use username part as public name
+            capabilities: ['key-management', 'token-management'],
+          });
+        } catch (regError) {
           // Log but don't fail - ring is created, registration is optional
           console.warn('[ring-registry] Could not register ring (non-fatal):', regError.message);
-        });
+        }
         
         return ring.id;
       } catch (error) {
