@@ -897,6 +897,12 @@
                 // Handle both old format (data.success) and new standardized format (data.status)
                 if (response.ok && (data.success || data.status === 'success')) {
                     tokenVerifiedEmail = email;
+                    
+                    // Save state to sessionStorage for refresh persistence
+                    sessionStorage.setItem('mcpTokenEmail', email);
+                    sessionStorage.setItem('mcpTokenStep', 'code-sent');
+                    sessionStorage.setItem('mcpTokenTimestamp', Date.now().toString());
+                    
                     document.getElementById('tokenStep1').style.display = 'none';
                     document.getElementById('tokenStep2').style.display = 'block';
                     document.getElementById('tokenCodeSentMessage').innerHTML = `Check your <strong>email</strong> for the 4-digit code sent to ${email}.`;
@@ -956,6 +962,11 @@
                 if (response.ok && data.status === 'success' && data.data && data.data.token) {
                     generatedToken = data.data.token;
                     
+                    // Clear sessionStorage since token was successfully generated
+                    sessionStorage.removeItem('mcpTokenEmail');
+                    sessionStorage.removeItem('mcpTokenStep');
+                    sessionStorage.removeItem('mcpTokenTimestamp');
+                    
                     // Hide token generation section
                     document.getElementById('tokenGenerationSection').style.display = 'none';
                     
@@ -1012,6 +1023,10 @@
         
         function resendTokenCode() {
             tokenVerifiedEmail = '';
+            // Clear sessionStorage when resending
+            sessionStorage.removeItem('mcpTokenEmail');
+            sessionStorage.removeItem('mcpTokenStep');
+            sessionStorage.removeItem('mcpTokenTimestamp');
             document.getElementById('tokenStep1').style.display = 'block';
             document.getElementById('tokenStep2').style.display = 'none';
             document.getElementById('tokenEmail').value = '';
