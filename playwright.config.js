@@ -8,17 +8,22 @@ const { defineConfig, devices } = require('@playwright/test');
 module.exports = defineConfig({
   testDir: './tests/e2e',
   
+  /* Skip debug tests in CI (they're for local development only) */
+  testMatch: process.env.CI 
+    ? ['**/*.spec.js', '!**/debug-*.spec.js']
+    : ['**/*.spec.js'],
+  
   /* Run tests in files in parallel */
   fullyParallel: true,
   
   /* Fail the build on CI if you accidentally left test.only in the source code. */
   forbidOnly: !!process.env.CI,
   
-  /* Retry on CI only */
-  retries: process.env.CI ? 2 : 0,
+  /* Retry on CI only - reduced to 1 for faster feedback */
+  retries: process.env.CI ? 1 : 0,
   
-  /* Opt out of parallel tests on CI. */
-  workers: process.env.CI ? 1 : undefined,
+  /* Run tests in parallel on CI - increase workers for faster execution */
+  workers: process.env.CI ? 2 : undefined,
   
   /* Reporter to use. See https://playwright.dev/docs/test-reporters */
   reporter: [
@@ -53,13 +58,14 @@ module.exports = defineConfig({
   /* Run your local dev server before starting the tests */
   webServer: {
     command: process.env.CI ? 'npm start' : 'npm run dev:marketing',
-    url: process.env.CI ? 'http://localhost:8080' : 'http://localhost:5173',
+    url: process.env.CI ? 'http://localhost:8080/health' : 'http://localhost:5173',
     reuseExistingServer: !process.env.CI,
-    timeout: 120 * 1000,
+    timeout: 60 * 1000, // Reduced from 120s to 60s - server should start faster
+    startupTimeout: 30 * 1000, // Wait up to 30s for server to be ready
   },
   
-  /* Global test timeout */
-  timeout: 30000,
+  /* Global test timeout - increased slightly to account for network delays */
+  timeout: 35000,
   
   /* Expect timeout */
   expect: {

@@ -32,7 +32,8 @@ jest.mock('../../server', () => {
 });
 
 jest.mock('../../kv-utils', () => ({
-  getKV: jest.fn(() => mockKV)
+  getStorage: jest.fn(() => mockKV),
+  getKV: jest.fn(() => mockKV) // Backward compatibility
 }));
 
 jest.mock('../../ring-management', () => ({

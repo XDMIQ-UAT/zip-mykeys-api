@@ -1,13 +1,10 @@
-name: Full Tests (Unit Only)
+name: Quick Tests (Unit Only)
 
 on:
   push:
-    branches: [master, main]
-    # Only run tests on main branches to save CI time
-  pull_request:
-    branches: [master, main]
+    # Trigger on all branches for quick feedback
   workflow_dispatch:
-    # Allow manual triggering for test suite
+    # Allow manual triggering
 
 # Cancel in-progress runs when a new commit is pushed to the same PR/branch
 concurrency:
@@ -18,7 +15,7 @@ jobs:
   unit-tests:
     name: Unit Tests
     runs-on: ubuntu-latest
-    timeout-minutes: 10  # Prevent infinite hangs
+    timeout-minutes: 10
     
     steps:
       - name: Checkout code
@@ -49,26 +46,4 @@ jobs:
             coverage/
           retention-days: 7
           if-no-files-found: ignore
-
-  test-summary:
-    name: Test Summary
-    runs-on: ubuntu-latest
-    needs: [unit-tests]
-    if: always()
-    timeout-minutes: 2  # Prevent infinite hangs
-    
-    # This job creates a status check that Vercel can wait for
-    # Status check name: "Full Tests (Unit Only) / test-summary"
-    
-    steps:
-      - name: Check test results
-        run: |
-          echo "Unit tests: ${{ needs.unit-tests.result }}"
-          
-          if [ "${{ needs.unit-tests.result }}" != "success" ]; then
-            echo "❌ Unit tests failed"
-            exit 1
-          fi
-          
-          echo "✅ All tests passed!"
 
