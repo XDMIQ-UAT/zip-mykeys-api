@@ -21,6 +21,12 @@ let AWS_REGION = 'us-east-1';
 function getSESClient() {
   if (sesClient) return sesClient;
   
+  // Skip initialization in test mode
+  if (process.env.NODE_ENV === 'test' || process.env.CI === 'true') {
+    console.log('[email-service] TEST MODE: Skipping SES client initialization');
+    return null; // Will be handled by sendAuthCode test mode check
+  }
+  
   // Get credentials from environment variables (Vercel)
   const accessKeyId = process.env.AWS_ACCESS_KEY_ID;
   const secretAccessKey = process.env.AWS_SECRET_ACCESS_KEY;
@@ -30,6 +36,12 @@ function getSESClient() {
     const missingVars = [];
     if (!accessKeyId) missingVars.push('AWS_ACCESS_KEY_ID');
     if (!secretAccessKey) missingVars.push('AWS_SECRET_ACCESS_KEY');
+    
+    // In test mode, don't throw - just log and return null
+    if (process.env.NODE_ENV === 'test' || process.env.CI === 'true') {
+      console.log(`[email-service] TEST MODE: AWS SES credentials missing (expected in tests)`);
+      return null;
+    }
     
     const errorMsg = `AWS SES credentials missing: ${missingVars.join(', ')}. ` +
       `Please set these environment variables in Vercel: ` +
@@ -71,6 +83,17 @@ function getSESClient() {
  * @returns {Promise<Object>} - Send result with messageId
  */
 async function sendAuthCode(toEmail, code, username = 'user') {
+  // Skip actual email sending in test mode to prevent hangs
+  if (process.env.NODE_ENV === 'test' || process.env.CI === 'true') {
+    console.log(`[email-service] TEST MODE: Skipping actual email send to ${toEmail} (code: ${code})`);
+    return {
+      success: true,
+      messageId: 'test-message-id',
+      to: toEmail,
+      testMode: true
+    };
+  }
+  
   // Get SES client (will throw if credentials missing)
   const client = getSESClient();
   
@@ -208,6 +231,17 @@ This is an automated message. Please do not reply.
   try {
     const client = getSESClient();
     
+    // Double-check test mode (in case getSESClient returned null)
+    if (!client && (process.env.NODE_ENV === 'test' || process.env.CI === 'true')) {
+      console.log(`[email-service] TEST MODE: Skipping actual email send to ${toEmail} (code: ${code})`);
+      return {
+        success: true,
+        messageId: 'test-message-id',
+        to: toEmail,
+        testMode: true
+      };
+    }
+    
     // Log sender email for debugging (after trimming)
     console.log(`[email-service] Sending email from: "${DEFAULT_SENDER}" (length: ${DEFAULT_SENDER.length})`);
     console.log(`[email-service] Sending email to: ${toEmail}`);
@@ -241,7 +275,13 @@ This is an automated message. Please do not reply.
       ConfigurationSetName: process.env.SES_CONFIGURATION_SET || undefined,
     });
     
-    const response = await client.send(command);
+    // Add timeout to prevent hangs (10 seconds max)
+    const sendPromise = client.send(command);
+    const timeoutPromise = new Promise((_, reject) => 
+      setTimeout(() => reject(new Error('Email send timeout after 10 seconds')), 10000)
+    );
+    
+    const response = await Promise.race([sendPromise, timeoutPromise]);
     console.log(`✓ Auth code email sent to ${toEmail}: ${response.MessageId}`);
     return {
       success: true,

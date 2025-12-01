@@ -1405,8 +1405,13 @@ app.post('/api/auth/request-mfa-code', async (req, res) => {
       
       // Now send the email with the code - verify it matches what we stored
       console.log(`[request-mfa-code] Sending email with code: "${code}"`);
-      const emailResult = await send2FACodeViaEmail(normalizedEmail, code);
-      console.log(`[request-mfa-code] Email send result:`, { success: emailResult.success, error: emailResult.error });
+      // Add timeout wrapper to prevent hangs (15 seconds max)
+      const emailPromise = send2FACodeViaEmail(normalizedEmail, code);
+      const timeoutPromise = new Promise((resolve) => 
+        setTimeout(() => resolve({ success: false, error: 'Email send timeout' }), 15000)
+      );
+      const emailResult = await Promise.race([emailPromise, timeoutPromise]);
+      console.log(`[request-mfa-code] Email send result:`, { success: emailResult.success, error: emailResult.error, testMode: emailResult.testMode });
       
       // Double-check stored code matches what we're sending
       const finalCheck = await getMFACode(normalizedEmail);

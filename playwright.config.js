@@ -64,8 +64,8 @@ module.exports = defineConfig({
     startupTimeout: 30 * 1000, // Wait up to 30s for server to be ready
   },
   
-  /* Global test timeout */
-  timeout: 30000,
+  /* Global test timeout - increased slightly to account for network delays */
+  timeout: 35000,
   
   /* Expect timeout */
   expect: {
