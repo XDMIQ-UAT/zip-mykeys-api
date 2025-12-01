@@ -557,10 +557,17 @@
                     if (response.status === 401 || data.message?.includes('Invalid credentials') || data.message?.includes('Authentication')) {
                         addOutput(output, 'Session expired. Please log in again.', 'error');
                         clearSession();
-                        // Show login form again
-                        document.getElementById('loginForm').style.display = 'block';
-                        document.getElementById('terminal').style.display = 'none';
-                        showMessage(document.getElementById('loginMessage'), 'Your session has expired. Please request a new magic link.', 'error');
+                        // Show login screen again
+                        const loginScreen = document.getElementById('loginScreen');
+                        const terminalScreen = document.getElementById('terminalScreen');
+                        if (loginScreen && terminalScreen) {
+                            loginScreen.style.display = 'flex';
+                            terminalScreen.style.display = 'none';
+                            const loginMessage = document.getElementById('loginMessage');
+                            if (loginMessage) {
+                                showMessage(loginMessage, 'Your session has expired. Please request a new magic link.', 'error');
+                            }
+                        }
                     } else {
                         addOutput(output, data.message || 'Command failed', 'error');
                     }
