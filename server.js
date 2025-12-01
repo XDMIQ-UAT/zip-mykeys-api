@@ -461,6 +461,10 @@ async function storeSecret(secretName, secretValue, labels = {}, ringId = null) 
 // Explicit routes for HTML pages to ensure they're served
 // IMPORTANT: /tools must be registered BEFORE / to prevent React Router from intercepting it
 app.get('/tools', (req, res) => {
+  // Set cache-busting headers to prevent Vercel/CDN from serving old cached version
+  res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+  res.setHeader('Pragma', 'no-cache');
+  res.setHeader('Expires', '0');
   res.sendFile(path.join(__dirname, 'public', 'tools.html'), (err) => {
     if (err) {
       console.error('[server] Error serving /tools:', err);
@@ -470,6 +474,10 @@ app.get('/tools', (req, res) => {
 });
 
 app.get('/tools.html', (req, res) => {
+  // Set cache-busting headers to prevent Vercel/CDN from serving old cached version
+  res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+  res.setHeader('Pragma', 'no-cache');
+  res.setHeader('Expires', '0');
   res.sendFile(path.join(__dirname, 'public', 'tools.html'), (err) => {
     if (err) {
       console.error('[server] Error serving /tools.html:', err);
