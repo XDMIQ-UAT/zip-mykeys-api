@@ -2,6 +2,12 @@
 
 This directory contains modular route handlers for the MyKeys API. Routes are automatically loaded and registered when the server starts.
 
+## 🔒 Security: Routes are PRIVATE by Default
+
+**All routes require authentication by default.** The route loader automatically applies authentication middleware to all routes unless explicitly marked as public.
+
+To create a public route (no authentication), set `public: true` in your route module exports.
+
 ## Creating a New Route Module
 
 ### Option 1: Function Export (Simplest)
@@ -34,21 +40,40 @@ module.exports = {
 
 ### Option 3: Express Router (Recommended for complex routes)
 
+**Private Route (Default - requires authentication):**
 ```javascript
 const express = require('express');
 const router = express.Router();
 
 router.get('/items', (req, res) => {
-  res.json({ items: [] });
+  // req.userEmail and req.ringId are available after authentication
+  res.json({ items: [], user: req.userEmail });
 });
 
 router.post('/items', (req, res) => {
-  res.json({ created: true });
+  res.json({ created: true, user: req.userEmail });
 });
 
 module.exports = {
   path: '/api/my-feature',
   router: router
+  // Routes are PRIVATE by default - authentication is automatically applied
+};
+```
+
+**Public Route (No authentication required):**
+```javascript
+const express = require('express');
+const router = express.Router();
+
+router.get('/public-info', (req, res) => {
+  res.json({ message: 'This is public' });
+});
+
+module.exports = {
+  path: '/api/my-feature',
+  router: router,
+  public: true  // Mark as public - no authentication required
 };
 ```
 

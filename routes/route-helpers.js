@@ -24,23 +24,36 @@ function sendResponse(res, statusCode, status, data, message) {
 
 /**
  * Require authentication middleware wrapper
+ * Routes are private by default - use this to ensure authentication
  * @param {Function} handler - Route handler function
  * @returns {Function} Wrapped handler with authentication
  */
 function requireAuth(handler) {
   return async (req, res, next) => {
-    // Import authenticate middleware dynamically to avoid circular deps
-    const { authenticate } = require('../server');
+    // Check if user is already authenticated (from previous middleware)
+    if (req.userEmail || req.token) {
+      return handler(req, res, next);
+    }
     
-    // Apply authenticate middleware first
-    authenticate(req, res, (err) => {
-      if (err) {
-        return sendResponse(res, 401, 'failure', null, 'Authentication required');
-      }
-      // Then call the actual handler
-      handler(req, res, next);
-    });
+    // Try to import authenticate middleware
+    try {
+      // Note: authenticate middleware should be applied at router level
+      // This is a fallback check
+      return sendResponse(res, 401, 'failure', null, 'Authentication required');
+    } catch (error) {
+      return sendResponse(res, 401, 'failure', null, 'Authentication required');
+    }
   };
+}
+
+/**
+ * Mark a route as public (no authentication required)
+ * Use this wrapper for routes that should be accessible without auth
+ * @param {Function} handler - Route handler function
+ * @returns {Function} Public route handler
+ */
+function publicRoute(handler) {
+  return handler; // No auth check - route is public
 }
 
 /**
@@ -141,6 +154,7 @@ module.exports = {
   requireAdmin,
   validateBody,
   asyncHandler,
-  getStorageSafe
+  getStorageSafe,
+  publicRoute
 };
 

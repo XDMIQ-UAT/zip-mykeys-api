@@ -51,9 +51,13 @@ router.use((req, res, next) => {
 });
 
 // GET /api/${routeName}
+// Note: Routes are PRIVATE by default - authentication is required
+// Use publicRoute() wrapper if you need a public endpoint
 router.get('/', asyncHandler(async (req, res) => {
+  // req.userEmail and req.ringId are available after authentication
   sendResponse(res, 200, 'success', {
     message: '${routeName} endpoint is working',
+    user: req.userEmail,
     timestamp: new Date().toISOString()
   });
 }));
@@ -63,12 +67,13 @@ router.get('/:id', asyncHandler(async (req, res) => {
   const { id } = req.params;
   sendResponse(res, 200, 'success', {
     id,
+    user: req.userEmail,
     message: \`Getting ${routeName} with id: \${id}\`
   });
 }));
 
 // POST /api/${routeName}
-router.post('/', requireAuth(asyncHandler(async (req, res) => {
+router.post('/', asyncHandler(async (req, res) => {
   const storage = getStorageSafe();
   if (!storage) {
     return sendResponse(res, 500, 'failure', null, 'Storage not available');
@@ -82,17 +87,18 @@ router.post('/', requireAuth(asyncHandler(async (req, res) => {
 })));
 
 // PUT /api/${routeName}/:id
-router.put('/:id', requireAuth(asyncHandler(async (req, res) => {
+router.put('/:id', asyncHandler(async (req, res) => {
   const { id } = req.params;
   // TODO: Implement your logic here
   sendResponse(res, 200, 'success', {
     id,
+    user: req.userEmail,
     message: 'Updated successfully'
   });
-})));
+}));
 
 // DELETE /api/${routeName}/:id
-router.delete('/:id', requireAuth(asyncHandler(async (req, res) => {
+router.delete('/:id', asyncHandler(async (req, res) => {
   const { id } = req.params;
   // TODO: Implement your logic here
   sendResponse(res, 200, 'success', {
@@ -103,7 +109,10 @@ router.delete('/:id', requireAuth(asyncHandler(async (req, res) => {
 
 module.exports = {
   path: '/api/${routeName}',
-  router: router
+  router: router,
+  // Routes are PRIVATE by default (require authentication)
+  // Set public: true to make routes accessible without auth
+  // public: false
 };
 `;
 

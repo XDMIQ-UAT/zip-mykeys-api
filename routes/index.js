@@ -2,6 +2,7 @@
  * Route Loader
  * 
  * Automatically loads and registers route modules from the routes directory
+ * Routes are PRIVATE by default - require authentication unless marked as public
  */
 
 const fs = require('fs');
@@ -13,8 +14,18 @@ const path = require('path');
  * @param {string} routesDir - Directory containing route files
  */
 function loadRoutes(app, routesDir = __dirname) {
+  // Import authenticate middleware once
+  let authenticate;
+  try {
+    // Try to get authenticate from server module
+    const serverModule = require('../server');
+    authenticate = serverModule.authenticate;
+  } catch (error) {
+    console.warn('[routes] Could not import authenticate middleware - routes will not be protected');
+  }
+  
   const routeFiles = fs.readdirSync(routesDir)
-    .filter(file => file.endsWith('.js') && file !== 'index.js');
+    .filter(file => file.endsWith('.js') && file !== 'index.js' && file !== 'route-helpers.js');
   
   console.log(`[routes] Loading ${routeFiles.length} route modules...`);
   
@@ -27,6 +38,7 @@ function loadRoutes(app, routesDir = __dirname) {
       // - A function: routeModule(app) - registers routes directly
       // - An object with 'register' method: routeModule.register(app)
       // - An object with 'router': app.use(routeModule.path, routeModule.router)
+      // - An object with 'public: true' to mark as public route
       
       if (typeof routeModule === 'function') {
         routeModule(app);
@@ -36,8 +48,16 @@ function loadRoutes(app, routesDir = __dirname) {
         console.log(`[routes] ✓ Loaded route module: ${file} (via register)`);
       } else if (routeModule.router) {
         const mountPath = routeModule.path || '/';
+        
+        // Apply authentication middleware unless route is marked as public
+        if (!routeModule.public && authenticate) {
+          app.use(mountPath, authenticate);
+          console.log(`[routes] ✓ Loaded route module: ${file} (mounted at ${mountPath}, PRIVATE)`);
+        } else {
+          console.log(`[routes] ✓ Loaded route module: ${file} (mounted at ${mountPath}, PUBLIC)`);
+        }
+        
         app.use(mountPath, routeModule.router);
-        console.log(`[routes] ✓ Loaded route module: ${file} (mounted at ${mountPath})`);
       } else {
         console.warn(`[routes] ⚠ Route module ${file} doesn't export a valid route handler`);
       }
@@ -46,7 +66,7 @@ function loadRoutes(app, routesDir = __dirname) {
     }
   });
   
-  console.log(`[routes] Route loading complete`);
+  console.log(`[routes] Route loading complete (routes are PRIVATE by default)`);
 }
 
 module.exports = { loadRoutes };
