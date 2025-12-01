@@ -110,7 +110,12 @@ Ring: ${ringId || 'default'}
  */
 async function handleListSecrets(token, ecosystem = null) {
   try {
-    const baseUrl = MYKEYS_URL || '';
+    // In local development, use relative URL to connect to same server
+    // Otherwise use full URL from MYKEYS_URL
+    const isLocalDev = process.env.NODE_ENV === 'development' || 
+                       !process.env.MYKEYS_URL || 
+                       process.env.MYKEYS_URL.includes('localhost') ||
+                       process.env.MYKEYS_URL.includes('127.0.0.1');
     
     // If no ecosystem specified, show message asking for one
     if (!ecosystem) {
@@ -119,7 +124,12 @@ async function handleListSecrets(token, ecosystem = null) {
       };
     }
     
-    const url = `${baseUrl}/api/v1/secrets/${ecosystem}`;
+    // Use relative URL in local dev (connects to same server)
+    // Use full URL in production
+    const url = isLocalDev 
+      ? `/api/v1/secrets/${ecosystem}`
+      : `${MYKEYS_URL || ''}/api/v1/secrets/${ecosystem}`;
+    
     const data = await apiRequest('GET', url, null, token);
     
     if (data.secrets && Array.isArray(data.secrets)) {
@@ -211,8 +221,14 @@ async function handleDeleteSecret(token, ecosystem, secretName) {
   }
   
   try {
-    const baseUrl = MYKEYS_URL || '';
-    const url = `${baseUrl}/api/v1/secrets/${ecosystem}/${secretName}`;
+    const isLocalDev = process.env.NODE_ENV === 'development' || 
+                       !process.env.MYKEYS_URL || 
+                       process.env.MYKEYS_URL.includes('localhost') ||
+                       process.env.MYKEYS_URL.includes('127.0.0.1');
+    
+    const url = isLocalDev 
+      ? `/api/v1/secrets/${ecosystem}/${secretName}`
+      : `${MYKEYS_URL || ''}/api/v1/secrets/${ecosystem}/${secretName}`;
     await apiRequest('DELETE', url, null, token);
     
     return { output: `Secret '${secretName}' deleted successfully from ecosystem '${ecosystem}'.` };
@@ -226,8 +242,14 @@ async function handleDeleteSecret(token, ecosystem, secretName) {
  */
 async function handleAdmin(token) {
   try {
-    const baseUrl = MYKEYS_URL || '';
-    const url = `${baseUrl}/api/admin/info`;
+    const isLocalDev = process.env.NODE_ENV === 'development' || 
+                       !process.env.MYKEYS_URL || 
+                       process.env.MYKEYS_URL.includes('localhost') ||
+                       process.env.MYKEYS_URL.includes('127.0.0.1');
+    
+    const url = isLocalDev 
+      ? `/api/admin/info`
+      : `${MYKEYS_URL || ''}/api/admin/info`;
     
     // Debug: log request
     console.log('[cli-handler] Admin API request:', { url, hasToken: !!token });
@@ -382,8 +404,15 @@ function apiRequest(method, url, body, token) {
     }
     
     // For relative URLs in Node.js context, construct full URL
+    // In local development, always use localhost instead of production URL
     if (useRelative && typeof window === 'undefined') {
-      const baseUrl = MYKEYS_URL || 'http://localhost:8080';
+      // Detect local development: if NODE_ENV is development or if MYKEYS_URL points to production
+      const isLocalDev = process.env.NODE_ENV === 'development' || 
+                        !process.env.MYKEYS_URL || 
+                        process.env.MYKEYS_URL.includes('localhost') ||
+                        process.env.MYKEYS_URL.includes('127.0.0.1');
+      
+      const baseUrl = isLocalDev ? 'http://localhost:8080' : (MYKEYS_URL || 'http://localhost:8080');
       urlObj = new URL(url, baseUrl);
     } else if (useRelative) {
       // Browser context - use fetch (but this is server-side, so shouldn't happen)
