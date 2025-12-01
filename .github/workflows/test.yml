@@ -25,8 +25,7 @@ jobs:
         run: npm ci
       
       - name: Run unit tests
-        run: npm run test:unit || echo "Tests completed (allowing failures for now to register status checks)"
-        continue-on-error: true
+        run: npm run test:unit
         env:
           CI: true
       
@@ -81,8 +80,7 @@ jobs:
           KV_REST_API_TOKEN: ${{ secrets.KV_REST_API_TOKEN || 'test-token' }}
       
       - name: Run E2E tests
-        run: npm test || echo "E2E tests completed (allowing failures for now to register status checks)"
-        continue-on-error: true
+        run: npm test
         env:
           CI: true
           BASE_URL: http://localhost:8080
@@ -120,8 +118,20 @@ jobs:
           echo "Unit tests: ${{ needs.unit-tests.result }}"
           echo "E2E tests: ${{ needs.e2e-tests.result }}"
           
-          # Temporarily allow failures to register status checks
-          # TODO: Remove continue-on-error and fix tests properly
-          echo "⚠️ Status checks are being registered (tests may fail)"
-          echo "✅ Status check registration complete"
+          if [ "${{ needs.unit-tests.result }}" != "success" ]; then
+            echo "❌ Unit tests failed"
+            exit 1
+          fi
+          
+          # E2E tests might be skipped on feature branches, which is OK
+          if [ "${{ needs.e2e-tests.result }}" == "failure" ]; then
+            echo "❌ E2E tests failed"
+            exit 1
+          fi
+          
+          if [ "${{ needs.e2e-tests.result }}" == "skipped" ]; then
+            echo "⚠️ E2E tests skipped (expected on feature branches)"
+          fi
+          
+          echo "✅ All tests passed!"
 

@@ -15,16 +15,16 @@ jest.mock('../../kv-utils', () => ({
   getKV: jest.fn(() => mockStorage) // Backward compatibility
 }));
 
-jest.mock('../ring-registry', () => ({
+jest.mock('../../ring-registry', () => ({
   updateRingMetadata: jest.fn(() => Promise.resolve()),
   registerRingKey: jest.fn(() => Promise.resolve(true))
 }));
 
-jest.mock('../key-management', () => ({
+jest.mock('../../key-management', () => ({
   registerRingKey: jest.fn(() => Promise.resolve(true))
 }));
 
-jest.mock('../ring-management', () => ({
+jest.mock('../../ring-management', () => ({
   logAuditEvent: jest.fn(() => Promise.resolve(true))
 }));
 
@@ -106,7 +106,7 @@ describe('Server Endpoints - Secret Storage', () => {
   });
 
   test('should register key with creator email when ringId exists', async () => {
-    const { registerRingKey } = require('../key-management');
+    const { registerRingKey } = require('../../key-management');
     const userEmail = req.userEmail;
     const ringId = req.ringId;
     
