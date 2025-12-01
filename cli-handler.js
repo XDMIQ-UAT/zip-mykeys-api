@@ -344,7 +344,10 @@ function apiRequest(method, url, body, token) {
           if (res.statusCode >= 200 && res.statusCode < 300) {
             resolve(parsed);
           } else {
-            reject(new Error(parsed.message || parsed.error || parsed.details || `HTTP ${res.statusCode}`));
+            // Build detailed error message
+            const errorMsg = parsed.message || parsed.error || `HTTP ${res.statusCode}`;
+            const details = parsed.details ? `: ${parsed.details}` : '';
+            reject(new Error(`${errorMsg}${details}`));
           }
         } catch (e) {
           reject(new Error(`Invalid JSON response: ${data.substring(0, 200)}`));
