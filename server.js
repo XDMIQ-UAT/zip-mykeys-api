@@ -373,7 +373,13 @@ app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
+// Serve both old and new paths for compatibility
 app.get('/mcp-config-generator.html', (req, res) => {
+  // Redirect to new filename to bypass caching
+  res.redirect(301, '/mcp-config-generator-v2.html');
+});
+
+app.get('/mcp-config-generator-v2.html', (req, res) => {
   // Set cache headers to prevent stale content
   res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
   res.setHeader('Pragma', 'no-cache');

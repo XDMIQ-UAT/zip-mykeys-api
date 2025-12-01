@@ -12,6 +12,10 @@
       "dest": "/server.js"
     },
     {
+      "src": "/mcp-config-generator-v2.html",
+      "dest": "/server.js"
+    },
+    {
       "src": "/generate-token.html",
       "dest": "/server.js"
     },
