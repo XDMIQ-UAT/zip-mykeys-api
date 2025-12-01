@@ -994,10 +994,17 @@ app.post('/api/v1/secrets/:ecosystem', authenticate, async (req, res) => {
       errorMessage = 'Error occurred but details could not be extracted';
     }
     
+    // Ensure details is always a string
+    const detailsStr = typeof errorMessage === 'string' 
+      ? errorMessage 
+      : (typeof errorMessage === 'object' 
+          ? JSON.stringify(errorMessage) 
+          : String(errorMessage));
+    
     res.status(500).json({ 
       error: 'Failed to store secret',
       message: 'Unable to save secret. Please try again or contact support if the issue persists.',
-      details: errorMessage
+      details: detailsStr
     });
   }
 });
