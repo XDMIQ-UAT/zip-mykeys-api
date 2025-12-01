@@ -1157,24 +1157,33 @@
                 args = [serverPath];
             }
             
-            const config = {
-                mcpServers: {
-                    "mykeys-zip": {
-                        command: command,
-                        args: args,
-                        env: {
-                            MYKEYS_URL: mykeysUrl,
-                            MCP_TOKEN: token,
-                            MCP_CLIENT_ID: clientId,
-                            MCP_CLIENT_TYPE: clientType,
-                            MCP_SYNC_ENABLED: "true"
-                        }
-                    }
+            // Create the server configuration object
+            const serverConfig = {
+                command: command,
+                args: args,
+                env: {
+                    MYKEYS_URL: mykeysUrl,
+                    MCP_TOKEN: token,
+                    MCP_CLIENT_ID: clientId,
+                    MCP_CLIENT_TYPE: clientType,
+                    MCP_SYNC_ENABLED: "true"
                 }
             };
             
-            // Add download instructions if using hosted version
-            let configOutput = JSON.stringify(config, null, 2);
+            // Generate JSON for copying into app's "Add MCP Server" interface
+            const serverJson = JSON.stringify(serverConfig, null, 2);
+            
+            // Also generate full config file format for reference
+            const fullConfig = {
+                mcpServers: {
+                    "mykeys-zip": serverConfig
+                }
+            };
+            const fullConfigJson = JSON.stringify(fullConfig, null, 2);
+            
+            // Build output with download instructions if needed
+            let configOutput = '';
+            
             if (serverSource === 'hosted') {
                 let downloadInstructions;
                 if (isWindows) {
@@ -1191,14 +1200,23 @@
 // curl -o ~/.mykeys/mcp-server.js https://mykeys.zip/mcp-server.js`;
                 }
                 configOutput = `${downloadInstructions}
-//
-// Then use this configuration:
 
-${configOutput}`;
+// Copy this JSON into your app's "Add MCP Server" interface:
+`;
+            } else {
+                configOutput = `// Copy this JSON into your app's "Add MCP Server" interface:
+
+`;
             }
             
-            generatedConfig = configOutput;
-            document.getElementById('configOutput').textContent = generatedConfig;
+            configOutput += serverJson;
+            configOutput += `
+
+// Full config file format (for manual file editing):
+${fullConfigJson}`;
+            
+            generatedConfig = serverJson; // Store just the server JSON for copying
+            document.getElementById('configOutput').textContent = configOutput;
             document.getElementById('configResult').classList.add('show');
             return true;
         }
@@ -1230,6 +1248,7 @@ ${configOutput}`;
         }
         
         function copyConfig(event) {
+            // Copy just the server JSON (not the comments or full config)
             if (generatedConfig) {
                 navigator.clipboard.writeText(generatedConfig).then(() => {
                     const btn = event ? event.target : document.querySelector('.copy-btn');
