@@ -13,7 +13,7 @@ function App() {
         <Route path="/" element={<Home />} />
         <Route path="/about" element={<About />} />
         <Route path="/docs" element={<Docs />} />
-        <Route path="/tools" element={<Tools />} />
+        {/* /tools route removed - now handled by Express server serving tools.html */}
         <Route path="/generate-token" element={<GenerateToken />} />
         <Route path="/generate-token.html" element={<GenerateToken />} />
       </Routes>
