@@ -373,26 +373,20 @@ app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
-// Serve both old and new paths for compatibility
+// Serve the main file - now with updated content
 app.get('/mcp-config-generator.html', (req, res) => {
-  // Redirect to new filename to bypass caching
-  res.redirect(301, '/mcp-config-generator-v2.html');
-});
-
-app.get('/mcp-config-generator-v2.html', (req, res) => {
   // Set cache headers to prevent stale content
   res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
   res.setHeader('Pragma', 'no-cache');
   res.setHeader('Expires', '0');
-  res.setHeader('X-Deployment-Verification', 'v2.2.0-FORCE-UPDATE');
+  res.setHeader('X-Deployment-Verification', 'v2.3.0-RESTORED');
   const fs = require('fs');
   
-  // Try multiple possible file paths - use the new v2 filename
+  // Try multiple possible file paths
   const possiblePaths = [
-    path.join(__dirname, 'public', 'mcp-config-generator-v2.html'),
-    path.join(process.cwd(), 'public', 'mcp-config-generator-v2.html'),
-    path.join(__dirname, 'public', 'mcp-config-generator.html'), // fallback
-    path.join(__dirname, 'mcp-config-generator-v2.html'),
+    path.join(__dirname, 'public', 'mcp-config-generator.html'),
+    path.join(process.cwd(), 'public', 'mcp-config-generator.html'),
+    path.join(__dirname, 'mcp-config-generator.html'),
   ];
   
   let filePath = null;
@@ -434,6 +428,11 @@ app.get('/mcp-config-generator-v2.html', (req, res) => {
       }
     });
   }
+});
+
+// Keep v2 route for backward compatibility - redirect to original
+app.get('/mcp-config-generator-v2.html', (req, res) => {
+  res.redirect(301, '/mcp-config-generator.html');
 });
 
 app.get('/generate-token.html', (req, res) => {
