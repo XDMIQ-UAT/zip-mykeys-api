@@ -88,9 +88,10 @@ Ring: ${ringId || 'default'}
  */
 async function handleListSecrets(token, ecosystem = null) {
   try {
+    const baseUrl = MYKEYS_URL || '';
     const url = ecosystem 
-      ? `${MYKEYS_URL}/api/v1/secrets/${ecosystem}`
-      : `${MYKEYS_URL}/api/v1/secrets`;
+      ? `${baseUrl}/api/v1/secrets/${ecosystem}`
+      : `${baseUrl}/api/v1/secrets`;
     
     const data = await apiRequest('GET', url, null, token);
     
@@ -129,7 +130,8 @@ async function handleGetSecret(token, ecosystem, secretName) {
   }
   
   try {
-    const url = `${MYKEYS_URL}/api/v1/secrets/${ecosystem}/${secretName}`;
+    const baseUrl = MYKEYS_URL || '';
+    const url = `${baseUrl}/api/v1/secrets/${ecosystem}/${secretName}`;
     const data = await apiRequest('GET', url, null, token);
     
     if (data.secret_value) {
@@ -151,7 +153,8 @@ async function handleSetSecret(token, ecosystem, secretName, value) {
   }
   
   try {
-    const url = `${MYKEYS_URL}/api/v1/secrets/${ecosystem}/${secretName}`;
+    const baseUrl = MYKEYS_URL || '';
+    const url = `${baseUrl}/api/v1/secrets/${ecosystem}/${secretName}`;
     const data = await apiRequest('PUT', url, { secret_value: value }, token);
     
     return { output: `Secret '${secretName}' set successfully in ecosystem '${ecosystem}'.` };
@@ -169,7 +172,8 @@ async function handleDeleteSecret(token, ecosystem, secretName) {
   }
   
   try {
-    const url = `${MYKEYS_URL}/api/v1/secrets/${ecosystem}/${secretName}`;
+    const baseUrl = MYKEYS_URL || '';
+    const url = `${baseUrl}/api/v1/secrets/${ecosystem}/${secretName}`;
     await apiRequest('DELETE', url, null, token);
     
     return { output: `Secret '${secretName}' deleted successfully from ecosystem '${ecosystem}'.` };
@@ -183,7 +187,8 @@ async function handleDeleteSecret(token, ecosystem, secretName) {
  */
 async function handleAdmin(token) {
   try {
-    const url = `${MYKEYS_URL}/api/admin/info`;
+    const baseUrl = MYKEYS_URL || '';
+    const url = `${baseUrl}/api/admin/info`;
     const data = await apiRequest('GET', url, null, token);
     
     let output = 'Admin Information:\n\n';
@@ -213,7 +218,8 @@ async function handleKeys(token, subcommand, args) {
   if (subcommand === 'list') {
     const ringId = args[0];
     try {
-      const url = `${MYKEYS_URL}/api/v1/rings/${ringId || 'default'}/keys`;
+      const baseUrl = MYKEYS_URL || '';
+      const url = `${baseUrl}/api/v1/rings/${ringId || 'default'}/keys`;
       const data = await apiRequest('GET', url, null, token);
       
       if (data.keys && Array.isArray(data.keys)) {
@@ -244,7 +250,8 @@ async function handleKeys(token, subcommand, args) {
  */
 async function handleRings(token, ringId) {
   try {
-    const url = `${MYKEYS_URL}/api/v1/rings/${ringId || 'default'}`;
+    const baseUrl = MYKEYS_URL || '';
+    const url = `${baseUrl}/api/v1/rings/${ringId || 'default'}`;
     const data = await apiRequest('GET', url, null, token);
     
     let output = `Ring Information:\n\n`;
@@ -261,10 +268,30 @@ async function handleRings(token, ringId) {
 
 /**
  * Make API request
+ * Supports both absolute URLs and relative paths (for same-origin requests)
  */
 function apiRequest(method, url, body, token) {
   return new Promise((resolve, reject) => {
-    const urlObj = new URL(url);
+    // Handle relative URLs (for same-origin requests)
+    let urlObj;
+    let useRelative = false;
+    
+    if (url.startsWith('/')) {
+      // Relative URL - use fetch API in browser context or http module for Node
+      useRelative = true;
+    } else {
+      urlObj = new URL(url);
+    }
+    
+    // For relative URLs in Node.js context, construct full URL
+    if (useRelative && typeof window === 'undefined') {
+      const baseUrl = MYKEYS_URL || 'http://localhost:8080';
+      urlObj = new URL(url, baseUrl);
+    } else if (useRelative) {
+      // Browser context - use fetch (but this is server-side, so shouldn't happen)
+      urlObj = new URL(url, 'http://localhost:8080');
+    }
+    
     const options = {
       hostname: urlObj.hostname,
       port: urlObj.port || (urlObj.protocol === 'https:' ? 443 : 80),
@@ -294,10 +321,10 @@ function apiRequest(method, url, body, token) {
           if (res.statusCode >= 200 && res.statusCode < 300) {
             resolve(parsed);
           } else {
-            reject(new Error(parsed.message || parsed.error || `HTTP ${res.statusCode}`));
+            reject(new Error(parsed.message || parsed.error || parsed.details || `HTTP ${res.statusCode}`));
           }
         } catch (e) {
-          reject(new Error(`Invalid JSON response: ${data}`));
+          reject(new Error(`Invalid JSON response: ${data.substring(0, 200)}`));
         }
       });
     });

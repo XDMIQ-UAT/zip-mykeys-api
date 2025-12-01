@@ -331,9 +331,8 @@
     <div id="shared-footer"></div>
     
     <script>
-        const API_BASE = window.MYKEYS_URL || (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
-            ? 'https://mykeys.zip'
-            : '';
+        // Use relative URLs for same-origin requests (works for both local and production)
+        const API_BASE = '';
         
         let sessionToken = localStorage.getItem('cliSessionToken');
         let userEmail = localStorage.getItem('cliUserEmail');
