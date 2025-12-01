@@ -422,10 +422,13 @@
                 const data = await response.json();
                 
                 if (response.ok && data.status === 'success') {
-                    // Check if email failed but link is provided (for preview/testing)
+                    // Check if link is provided (for local dev/preview/testing)
                     if (data.data && data.data.link) {
-                        const linkMessage = `Email sending failed (preview mode). <a href="${data.data.link}" style="color: #667eea; text-decoration: underline;">Click here to sign in</a>`;
-                        showMessage(messageDiv, linkMessage, 'success');
+                        const linkMessage = data.data.localDev 
+                            ? `Magic link generated (local dev mode). <a href="${data.data.link}" target="_blank" style="color: #00ff00; text-decoration: underline; font-weight: bold;">Click here to sign in</a><br><br><small style="color: #888;">Or copy this link: <code style="background: #1a1a1a; padding: 2px 6px; border-radius: 2px;">${data.data.link}</code></small>`
+                            : `Email sending failed (preview mode). <a href="${data.data.link}" target="_blank" style="color: #667eea; text-decoration: underline;">Click here to sign in</a>`;
+                        messageDiv.innerHTML = linkMessage;
+                        messageDiv.className = 'success-message';
                         sendBtn.textContent = 'Link Generated ✓';
                     } else {
                         showMessage(messageDiv, `Magic link sent to ${email}. Check your email and click the link to sign in.`, 'success');

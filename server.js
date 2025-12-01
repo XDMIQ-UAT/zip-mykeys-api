@@ -3963,7 +3963,22 @@ ${magicLink}
 This link will expire in 15 minutes. If you didn't request this link, you can safely ignore this email.
       `.trim();
       
-      // Send magic link email using SES
+      // Send magic link email using SES (or show link directly in local dev)
+      const isLocalDev = process.env.NODE_ENV === 'development' || !process.env.AWS_ACCESS_KEY_ID;
+      
+      if (isLocalDev) {
+        // In local development, return the link directly instead of sending email
+        console.log(`\n🔗 [LOCAL DEV] Magic link for ${normalizedEmail}:`);
+        console.log(`   ${magicLink}\n`);
+        
+        return sendResponse(res, 200, 'success', {
+          link: magicLink,
+          message: 'Magic link generated (local development mode - email not sent)',
+          localDev: true
+        });
+      }
+      
+      // Production: Send email via SES
       try {
         const { SESClient, SendEmailCommand } = require('@aws-sdk/client-ses');
         const sesClient = new SESClient({
@@ -3987,21 +4002,29 @@ This link will expire in 15 minutes. If you didn't request this link, you can sa
         }));
         
         console.log(`[cli] Magic link email sent to ${normalizedEmail}`);
+        
+        return sendResponse(res, 200, 'success', {
+          message: 'Magic link sent to your email'
+        });
       } catch (emailError) {
         console.error('[cli] Failed to send magic link email:', emailError);
-        // Continue - token is stored, user can check logs or use token directly
+        // Email failed - return link directly for local dev/testing
+        console.log(`\n🔗 [LOCAL DEV] Magic link for ${normalizedEmail}:`);
+        console.log(`   ${magicLink}\n`);
+        
+        return sendResponse(res, 200, 'success', {
+          link: magicLink,
+          message: 'Magic link generated (email sending failed - use link below)',
+          localDev: true
+        });
       }
-      
-      return sendResponse(res, 200, 'success', {
-        message: 'Magic link sent to your email'
-      });
     } catch (emailError) {
       console.error('[cli] Failed to send magic link email:', emailError);
       // Still return success - token is stored, user can check logs
       return sendResponse(res, 200, 'success', {
         message: 'Magic link generated (email may have failed)',
-        token: magicToken, // For testing - remove in production
-        link: magicLink
+        link: magicLink,
+        localDev: true
       });
     }
   } catch (error) {
