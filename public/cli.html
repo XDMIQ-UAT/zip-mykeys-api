@@ -135,12 +135,26 @@
         .terminal-input-line {
             display: flex;
             align-items: center;
-            margin-top: 5px;
+            padding: 10px;
+            border-top: 1px solid #333;
+            background: #0a0a0a;
+            position: sticky;
+            bottom: 0;
+            z-index: 10;
+        }
+        
+        .terminal-input-line.busy {
+            opacity: 0.6;
+        }
+        
+        .terminal-input-line.busy .terminal-input {
+            cursor: wait;
         }
         
         .terminal-prompt-text {
             color: #00ff00;
             margin-right: 8px;
+            white-space: nowrap;
         }
         
         .terminal-input {
@@ -152,6 +166,26 @@
             font-size: 14px;
             outline: none;
             caret-color: #00ff00;
+        }
+        
+        .terminal-input:disabled {
+            opacity: 0.5;
+            cursor: wait;
+        }
+        
+        .command-status {
+            color: #888;
+            font-size: 12px;
+            margin-left: 10px;
+            font-style: italic;
+        }
+        
+        .command-status.running {
+            color: #00ff00;
+        }
+        
+        .command-status.running::before {
+            content: '⏳ ';
         }
         
         /* Login Screen */
@@ -322,9 +356,10 @@
                 </div>
             </div>
             
-            <div class="terminal-input-line">
+            <div class="terminal-input-line" id="terminalInputLine">
                 <span class="terminal-prompt-text" id="promptText">mykeys@online:~$</span>
                 <input type="text" class="terminal-input" id="terminalInput" autocomplete="off" spellcheck="false">
+                <span class="command-status" id="commandStatus"></span>
             </div>
         </div>
     </div>
@@ -454,7 +489,10 @@
         function showTerminal() {
             document.getElementById('loginScreen').style.display = 'none';
             document.getElementById('terminalScreen').style.display = 'flex';
-            document.getElementById('terminalInput').focus();
+            // Small delay to ensure DOM is ready
+            setTimeout(() => {
+                document.getElementById('terminalInput').focus();
+            }, 100);
             updatePrompt();
         }
         
@@ -508,19 +546,32 @@
         
         async function executeCommand(command) {
             const output = document.getElementById('terminalOutput');
+            const terminalInput = document.getElementById('terminalInput');
+            const terminalInputLine = document.getElementById('terminalInputLine');
+            const commandStatus = document.getElementById('commandStatus');
+            
+            // Show command in output
             const inputLine = document.createElement('div');
             inputLine.className = 'terminal-line';
             inputLine.innerHTML = `<span class="terminal-prompt">${document.getElementById('promptText').textContent}</span> ${command}`;
             output.appendChild(inputLine);
             
+            // Set busy state
+            terminalInput.disabled = true;
+            terminalInputLine.classList.add('busy');
+            commandStatus.textContent = 'Running...';
+            commandStatus.classList.add('running');
+            
             // Handle local commands
             if (command === 'help') {
                 showHelp(output);
+                resetInputState();
                 return;
             }
             
             if (command === 'clear' || command === 'cls') {
                 output.innerHTML = '';
+                resetInputState();
                 return;
             }
             
@@ -532,6 +583,7 @@
                 } else {
                     addOutput(output, `Invalid theme. Available: linux, mac, windows`, 'error');
                 }
+                resetInputState();
                 return;
             }
             
@@ -577,9 +629,23 @@
                 }
             } catch (error) {
                 addOutput(output, `Error: ${error.message}`, 'error');
+            } finally {
+                resetInputState();
             }
             
             output.scrollTop = output.scrollHeight;
+        }
+        
+        function resetInputState() {
+            const terminalInput = document.getElementById('terminalInput');
+            const terminalInputLine = document.getElementById('terminalInputLine');
+            const commandStatus = document.getElementById('commandStatus');
+            
+            terminalInput.disabled = false;
+            terminalInputLine.classList.remove('busy');
+            commandStatus.textContent = '';
+            commandStatus.classList.remove('running');
+            terminalInput.focus();
         }
         
         function showHelp(output) {
