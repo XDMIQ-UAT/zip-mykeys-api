@@ -17,6 +17,7 @@ const helmet = require('helmet');
 const cors = require('cors');
 const morgan = require('morgan');
 const rateLimit = require('express-rate-limit');
+const { hashEmail, getStorageKey } = require('./email-hash');
 const { generateMCPToken, validateMCPToken, revokeMCPToken } = require('./token-auth');
 const { sendVerificationCode: sendSMSVerificationCode } = require('./sms-service');
 const { sendAuthCode: sendEmailAuthCode } = require('./email-service');
@@ -161,10 +162,10 @@ const authenticate = async (req, res, next) => {
   if (authHeader.startsWith('Bearer ')) {
     const token = authHeader.substring(7);
     if (token.length >= 32) {
-      // Try device token first
+      // Try device token first (skip if storage not configured)
       try {
         const deviceValidation = await validateDeviceToken(token);
-        if (deviceValidation.valid) {
+        if (deviceValidation && deviceValidation.valid) {
           req.authType = 'device';
           req.deviceId = deviceValidation.deviceId;
           req.username = deviceValidation.username;
@@ -173,44 +174,92 @@ const authenticate = async (req, res, next) => {
           return next();
         }
       } catch (err) {
-        // Continue to MCP token check
+        // Continue to CLI session token check (device auth not available or failed)
+        // Don't log errors for missing storage in local dev
+        if (!err.message?.includes('Storage not configured')) {
+          console.error('[auth] Device token validation error:', err.message);
+        }
       }
 
       // Try CLI session token first
       try {
         const kv = getStorage();
         if (kv) {
-          const sessionData = await storage.get(`cli:session:${token}`);
+          const sessionData = await kv.get(`cli:session:${token}`);
           if (sessionData) {
             // Handle both string and object responses from storage
             const session = typeof sessionData === 'string' ? JSON.parse(sessionData) : sessionData;
             
-            // Validate session structure
-            if (!session.email || !session.expiresAt) {
-              console.error('[auth] Invalid CLI session data structure:', session);
-              // Continue to MCP token check
-            } else {
-              // Check expiration
-              if (Date.now() > session.expiresAt) {
-                await storage.del(`cli:session:${token}`);
-                return sendResponse(res, 401, 'failure', null, 'Session expired');
+            // Validate session structure (now uses emailHash instead of email)
+            if (!session.emailHash || !session.expiresAt) {
+              // Check for old format (backward compatibility - migrate)
+              if (session.email && session.expiresAt) {
+                // Migrate old session to hash-only format
+                const emailHash = hashEmail(session.email);
+                await kv.set(`cli:session:${token}`, JSON.stringify({
+                  emailHash: emailHash,
+                  createdAt: session.createdAt || Date.now(),
+                  expiresAt: session.expiresAt,
+                  lastActivity: Date.now()
+                }), { ex: 86400 });
+                session.emailHash = emailHash;
+              } else {
+                console.error('[auth] Invalid CLI session data structure:', session);
+                // Continue to MCP token check
+                return;
               }
-              
-              // Update last activity
-              session.lastActivity = Date.now();
-              await storage.set(`cli:session:${token}`, JSON.stringify(session), { ex: 86400 });
-              
-              req.authType = 'cli-session';
-              req.userEmail = session.email;
-              req.token = token; // Store token for CLI handler
-              try {
-                req.ringId = await getRingForUser(session.email, true);
-              } catch (ringError) {
-                console.error('[auth] Error getting ring for CLI user:', ringError);
-                req.ringId = 'default'; // Fallback to default ring
-              }
-              return next();
             }
+            
+            // Check expiration
+            if (Date.now() > session.expiresAt) {
+              await kv.del(`cli:session:${token}`);
+              return sendResponse(res, 401, 'failure', null, 'Session expired');
+            }
+            
+            // IMPORTANT: Email is NOT stored in session (privacy)
+            // User must provide email in request - we hash it and compare with session.emailHash
+            let userEmail = null;
+            
+            // Try to get email from request body, header, or query
+            if (req.body && req.body.email) {
+              userEmail = req.body.email.trim().toLowerCase();
+            } else if (req.headers['x-user-email']) {
+              userEmail = req.headers['x-user-email'].trim().toLowerCase();
+            } else if (req.query && req.query.email) {
+              userEmail = req.query.email.trim().toLowerCase();
+            }
+            
+            // Verify provided email matches session hash
+            if (userEmail) {
+              const providedEmailHash = hashEmail(userEmail);
+              if (providedEmailHash !== session.emailHash) {
+                return sendResponse(res, 401, 'failure', null, 'Email does not match session. Please provide the email address you used to sign up.');
+              }
+            } else {
+              // Email not provided - require it
+              return sendResponse(res, 401, 'failure', null, 'Email required. Cannot authenticate without your email address. Please provide the email you used to sign up.');
+            }
+            
+            // Update last activity
+            session.lastActivity = Date.now();
+            await kv.set(`cli:session:${token}`, JSON.stringify({
+              emailHash: session.emailHash,
+              createdAt: session.createdAt,
+              expiresAt: session.expiresAt,
+              lastActivity: Date.now()
+            }), { ex: 86400 });
+            
+            req.authType = 'cli-session';
+            req.userEmail = userEmail; // Keep email in memory for request (from user input)
+            req.userEmailHash = session.emailHash; // Provide hash for storage operations
+            req.token = token; // Store token for CLI handler
+            try {
+              req.ringId = await getRingForUser(userEmail, true);
+            } catch (ringError) {
+              console.error('[auth] Error getting ring for CLI user:', ringError);
+              req.ringId = 'default'; // Fallback to default ring
+            }
+            return next();
           }
         }
       } catch (err) {
@@ -227,6 +276,10 @@ const authenticate = async (req, res, next) => {
           req.clientId = validation.clientId;
           req.clientType = validation.clientType;
           req.userEmail = validation.email;
+          // Add email hash for storage operations (privacy)
+          if (validation.email) {
+            req.userEmailHash = hashEmail(validation.email);
+          }
           
           // Check if this is an AI agent - verify delegation
           const account = await getAccount(validation.email || token);
@@ -931,7 +984,9 @@ app.post('/api/v1/secrets/:ecosystem', authenticate, async (req, res) => {
       ...(description && { description: description })
     };
     
+    console.log(`[secret-storage] Storing secret: ${secretName} in ecosystem: ${ecosystem}, ringId: ${ringId}`);
     const result = await storeSecret(secretName, secretValueStr, labels, ringId);
+    console.log(`[secret-storage] Secret stored successfully: ${secretName}`);
     
     // Register key in ring's key list (content belongs to ring)
     // Also track analytics for viral expansion and resource planning
@@ -939,7 +994,9 @@ app.post('/api/v1/secrets/:ecosystem', authenticate, async (req, res) => {
     if (ringId) {
       const creatorEmail = userEmail || null;
       try {
+        console.log(`[secret-storage] Registering ring key: ${secretName} in ring: ${ringId}`);
         await registerRingKey(ringId, secretName, secretValueStr, labels, creatorEmail);
+        console.log(`[secret-storage] Ring key registered successfully`);
       } catch (registerError) {
         // Log but don't fail - secret is stored, registration is optional
         console.error('[secret-storage] Error registering ring key (non-fatal):', registerError.message || registerError);
@@ -963,13 +1020,16 @@ app.post('/api/v1/secrets/:ecosystem', authenticate, async (req, res) => {
       }
     }
     
-    res.json({
+    console.log(`[secret-storage] Sending success response for secret: ${secret_name}`);
+    const responseData = {
       success: true,
       secret_name: secret_name,
       ecosystem: ecosystem,
       ringId: ringId || null,
       message: `Secret ${secret_name} ${result.created ? 'created' : 'updated'} successfully. Content is accessible to all ring members.`
-    });
+    };
+    console.log(`[secret-storage] Response data:`, JSON.stringify(responseData));
+    res.json(responseData);
   } catch (error) {
     console.error(`Error storing secret ${req.params.ecosystem}:`, error);
     
@@ -1639,6 +1699,39 @@ const requireAdminRole = async (req, res, next) => {
     }
     
     const token = authHeader.substring(7);
+    
+    // Try CLI session token first (for web CLI)
+    if (token.length >= 32) {
+      try {
+        const storage = getStorage();
+        if (storage) {
+          const sessionData = await storage.get(`cli:session:${token}`);
+          if (sessionData) {
+            const session = typeof sessionData === 'string' ? JSON.parse(sessionData) : sessionData;
+            
+            // Check expiration
+            if (session.email && session.expiresAt && Date.now() <= session.expiresAt) {
+              // Check if user has admin role
+              const userRoles = await getUserRoles(session.email);
+              if (userRoles.includes('owner') || userRoles.includes('architect')) {
+                req.userEmail = session.email;
+                req.userRoles = userRoles;
+                req.authType = 'cli-session';
+                req.token = token;
+                return next();
+              } else {
+                return sendResponse(res, 403, 'failure', null, 'Forbidden', 'Only owners and architects can access admin endpoints');
+              }
+            }
+          }
+        }
+      } catch (err) {
+        // Continue to MCP token check
+        console.error('[requireAdminRole] Error checking CLI session:', err.message);
+      }
+    }
+    
+    // Fall back to MCP token validation
     const validation = await validateMCPToken(token);
     
     if (!validation.valid) {
@@ -3879,16 +3972,22 @@ app.post('/api/cli/send-magic-link', async (req, res) => {
       return sendResponse(res, 500, 'failure', null, 'Storage unavailable');
     }
     
-    // Store magic link token
+    // Store magic link token with email hash (privacy - email not stored)
+    // User must provide email to verify - we hash it and compare
+    const emailHash = hashEmail(normalizedEmail);
     await storage.set(`cli:magic-link:${magicToken}`, JSON.stringify({
-      email: normalizedEmail,
+      emailHash: emailHash, // Store hash, not email (privacy)
       expiresAt,
       createdAt: Date.now()
     }), { ex: 900 }); // 15 minutes expiry
     
-    // Generate magic link URL
+    // Also store temporary mapping: magic token -> email (only during link validity)
+    // This is needed for email sending - deleted after verification
+    await storage.set(`cli:magic-link-email:${magicToken}`, normalizedEmail, { ex: 900 });
+    
+    // Generate magic link URL (include email for automatic verification)
     const baseUrl = req.protocol + '://' + req.get('host');
-    const magicLink = `${baseUrl}/cli.html?token=${magicToken}`;
+    const magicLink = `${baseUrl}/cli.html?token=${magicToken}&email=${encodeURIComponent(normalizedEmail)}`;
     
     // Send magic link email
     try {
@@ -3930,7 +4029,22 @@ ${magicLink}
 This link will expire in 15 minutes. If you didn't request this link, you can safely ignore this email.
       `.trim();
       
-      // Send magic link email using SES
+      // Send magic link email using SES (or show link directly in local dev)
+      const isLocalDev = process.env.NODE_ENV === 'development' || !process.env.AWS_ACCESS_KEY_ID;
+      
+      if (isLocalDev) {
+        // In local development, return the link directly instead of sending email
+        console.log(`\n🔗 [LOCAL DEV] Magic link for ${normalizedEmail}:`);
+        console.log(`   ${magicLink}\n`);
+        
+        return sendResponse(res, 200, 'success', {
+          link: magicLink,
+          message: 'Magic link generated (local development mode - email not sent)',
+          localDev: true
+        });
+      }
+      
+      // Production: Send email via SES
       try {
         const { SESClient, SendEmailCommand } = require('@aws-sdk/client-ses');
         const sesClient = new SESClient({
@@ -3954,21 +4068,29 @@ This link will expire in 15 minutes. If you didn't request this link, you can sa
         }));
         
         console.log(`[cli] Magic link email sent to ${normalizedEmail}`);
+        
+        return sendResponse(res, 200, 'success', {
+          message: 'Magic link sent to your email'
+        });
       } catch (emailError) {
         console.error('[cli] Failed to send magic link email:', emailError);
-        // Continue - token is stored, user can check logs or use token directly
+        // Email failed - return link directly for local dev/testing
+        console.log(`\n🔗 [LOCAL DEV] Magic link for ${normalizedEmail}:`);
+        console.log(`   ${magicLink}\n`);
+        
+        return sendResponse(res, 200, 'success', {
+          link: magicLink,
+          message: 'Magic link generated (email sending failed - use link below)',
+          localDev: true
+        });
       }
-      
-      return sendResponse(res, 200, 'success', {
-        message: 'Magic link sent to your email'
-      });
     } catch (emailError) {
       console.error('[cli] Failed to send magic link email:', emailError);
       // Still return success - token is stored, user can check logs
       return sendResponse(res, 200, 'success', {
         message: 'Magic link generated (email may have failed)',
-        token: magicToken, // For testing - remove in production
-        link: magicLink
+        link: magicLink,
+        localDev: true
       });
     }
   } catch (error) {
@@ -3980,18 +4102,23 @@ This link will expire in 15 minutes. If you didn't request this link, you can sa
 // Verify magic link and create CLI session
 app.post('/api/cli/verify-magic-link', async (req, res) => {
   try {
-    const { token } = req.body;
+    const { token, email } = req.body;
     
     if (!token) {
       return sendResponse(res, 400, 'failure', null, 'Token is required');
     }
     
+    if (!email) {
+      return sendResponse(res, 400, 'failure', null, 'Email is required - cannot verify without your email address');
+    }
+    
+    const normalizedEmail = email.trim().toLowerCase();
     const storage = getStorage();
     if (!storage) {
       return sendResponse(res, 500, 'failure', null, 'Storage unavailable');
     }
     
-    // Get magic link data
+    // Get magic link data (contains emailHash)
     const magicLinkData = await storage.get(`cli:magic-link:${token}`);
     
     if (!magicLinkData) {
@@ -4009,28 +4136,38 @@ app.post('/api/cli/verify-magic-link', async (req, res) => {
     // Check expiration
     if (Date.now() > linkData.expiresAt) {
       await storage.del(`cli:magic-link:${token}`);
+      await storage.del(`cli:magic-link-email:${token}`);
       return sendResponse(res, 401, 'failure', null, 'Magic link has expired');
     }
     
-    // Delete magic link (one-time use)
+    // Verify provided email matches magic link hash
+    const providedEmailHash = hashEmail(normalizedEmail);
+    if (providedEmailHash !== linkData.emailHash) {
+      return sendResponse(res, 401, 'failure', null, 'Email does not match magic link');
+    }
+    
+    // Delete magic link (one-time use) and temporary email storage
     await storage.del(`cli:magic-link:${token}`);
+    await storage.del(`cli:magic-link-email:${token}`);
     
     // Generate CLI session token
     const sessionToken = crypto.randomBytes(32).toString('hex');
     const sessionExpiresAt = Date.now() + (24 * 60 * 60 * 1000); // 24 hours
     
-    // Store session
+    // Store session with email hash ONLY (privacy - email not stored in storage)
+    // User must provide email in each request - we hash it and compare with stored hash
     await storage.set(`cli:session:${sessionToken}`, JSON.stringify({
-      email: linkData.email,
+      emailHash: providedEmailHash, // Store hash, not email (privacy)
       createdAt: Date.now(),
       expiresAt: sessionExpiresAt,
       lastActivity: Date.now()
     }), { ex: 86400 }); // 24 hours
     
     // Get user's ring for isolation (don't fail if this errors)
+    // Use provided email (not stored email) for ring lookup
     let ringId = null;
     try {
-      ringId = await getRingForUser(linkData.email, true);
+      ringId = await getRingForUser(normalizedEmail, true);
       if (!ringId) {
         ringId = 'default';
       }
@@ -4041,10 +4178,13 @@ app.post('/api/cli/verify-magic-link', async (req, res) => {
       ringId = 'default';
     }
     
+    // Return session token - email is NOT returned (privacy)
+    // User must provide email in each request
     return sendResponse(res, 200, 'success', {
       sessionToken,
-      email: linkData.email,
-      ringId: ringId || 'default'
+      // Email NOT returned - user must provide it in each request
+      ringId: ringId || 'default',
+      message: 'Session created. You must provide your email address in each request.'
     });
   } catch (error) {
     console.error('[cli] Error verifying magic link:', error);
@@ -4055,10 +4195,11 @@ app.post('/api/cli/verify-magic-link', async (req, res) => {
 // Verify CLI session
 app.post('/api/cli/verify-session', authenticate, async (req, res) => {
   try {
-    // authenticate middleware sets req.userEmail and req.ringId
+    // authenticate middleware sets req.userEmail and req.ringId after email verification
+    // Email is NOT returned (privacy) - client already has it
     return sendResponse(res, 200, 'success', {
       valid: true,
-      email: req.userEmail,
+      // Email NOT returned - user must provide it (privacy)
       ringId: req.ringId
     });
   } catch (error) {
@@ -4090,11 +4231,24 @@ app.post('/api/cli/execute', authenticate, async (req, res) => {
     let output = '';
     let error = null;
     
-    // Handle mykeys commands
+    // List of direct mykeys commands (can be used without "mykeys" prefix)
+    const mykeysCommands = ['list', 'get', 'set', 'delete', 'remove', 'admin', 'keys', 'rings', 'secrets'];
+    
+    // Handle mykeys commands (with or without "mykeys" prefix)
+    let mykeysCmd;
+    let mykeysArgs;
+    
     if (cmd === 'mykeys' || cmd.startsWith('mykeys')) {
-      const mykeysCmd = parts[1] || 'help';
-      // Remove the command itself from args (args currently includes "set", "get", etc.)
-      const mykeysArgs = parts.slice(2);
+      // Command starts with "mykeys" - extract subcommand
+      mykeysCmd = parts[1] || 'help';
+      mykeysArgs = parts.slice(2);
+    } else if (mykeysCommands.includes(cmd)) {
+      // Direct command without "mykeys" prefix
+      mykeysCmd = cmd;
+      mykeysArgs = args;
+    }
+    
+    if (mykeysCmd) {
       
       try {
         // Import CLI handler
@@ -4111,19 +4265,63 @@ app.post('/api/cli/execute', authenticate, async (req, res) => {
           return sendResponse(res, 401, 'failure', null, 'Token not found');
         }
         
-        const result = await executeCLICommand(mykeysCmd, mykeysArgs, {
+        // Add timeout wrapper to prevent hangs
+        const commandPromise = executeCLICommand(mykeysCmd, mykeysArgs, {
           email: userEmail,
           ringId,
           token: token
         });
         
+        const timeoutPromise = new Promise((_, reject) => 
+          setTimeout(() => reject(new Error('Command execution timeout')), 25000)
+        );
+        
+        const result = await Promise.race([commandPromise, timeoutPromise]);
+        
         output = result.output || '';
         error = result.error || null;
       } catch (cmdError) {
-        error = cmdError.message;
+        error = cmdError.message || 'Command execution failed';
+        console.error('[cli] Command execution error:', cmdError);
       }
     } else {
-      output = `Command '${cmd}' not found. Type 'help' for available commands.`;
+      // Not a mykeys command - check for built-in commands
+      if (cmd === 'help') {
+        output = `MyKeys CLI Commands:
+
+You can use commands with or without the "mykeys" prefix:
+
+DIRECT COMMANDS (no prefix needed):
+  list <ecosystem>                    List secrets in an ecosystem
+  get <ecosystem> <secretName>       Get a secret value
+  set <ecosystem> <secretName> <value>  Set a secret value
+  delete <ecosystem> <secretName>    Delete a secret
+  admin                               Show admin information
+
+WITH "mykeys" PREFIX (also supported):
+  mykeys list <ecosystem>
+  mykeys get <ecosystem> <secretName>
+  mykeys set <ecosystem> <secretName> <value>
+  mykeys delete <ecosystem> <secretName>
+  mykeys admin
+
+OTHER COMMANDS:
+  help                                Show this help message
+  clear / cls                         Clear terminal
+  theme <name>                        Change theme (linux, mac, windows)
+
+Examples:
+  list shared                         List secrets in "shared" ecosystem
+  list mine                           List secrets in "mine" ecosystem
+  get shared api-key                  Get "api-key" from "shared" ecosystem
+  set shared api-key abc123           Set "api-key" in "shared" ecosystem
+  set mine my-secret "value with spaces"  Set secret with spaces (use quotes)
+  admin                               Show admin information
+
+Note: All secret commands require an <ecosystem> parameter (e.g., "shared", "mine", "gcp")`;
+      } else {
+        output = `Command '${cmd}' not found. Type 'help' for available commands.`;
+      }
     }
     
     return sendResponse(res, 200, 'success', {
@@ -4151,6 +4349,16 @@ app.get('/oauth2callback', (req, res) => {
   
   res.redirect('/role-management.html');
 });
+
+// Load modular routes from routes directory
+try {
+  const { loadRoutes } = require('./routes');
+  loadRoutes(app);
+  console.log('[server] Modular routes loaded');
+} catch (error) {
+  console.warn('[server] Could not load modular routes:', error.message);
+  console.warn('[server] Continuing without modular routes...');
+}
 
 // Serve static files (including React Router app)
 app.use(express.static(path.join(__dirname, 'public'), {
@@ -4209,4 +4417,6 @@ if (process.env.VERCEL !== '1') {
   console.log(`📦 Project: ${PROJECT_ID}`);
 }
 
+// Export app and authenticate middleware for use in route modules
 module.exports = app;
+module.exports.authenticate = authenticate;

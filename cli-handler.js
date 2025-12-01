@@ -52,28 +52,31 @@ async function executeCLICommand(command, args = [], context = {}) {
         return {
           output: `MyKeys CLI Commands:
 
+You can use commands with or without the "mykeys" prefix:
+
 SECRET MANAGEMENT:
-  mykeys list [ecosystem]                    List all secrets (optionally filtered by ecosystem)
-                                              Example: mykeys list
-                                                      mykeys list shared
+  list <ecosystem>                           List secrets in an ecosystem
+                                              Example: list shared
+                                                      list mine
+                                                      list gcp
 
-  mykeys get <ecosystem> <secretName>        Get a secret value
-                                              Example: mykeys get shared api-key
+  get <ecosystem> <secretName>              Get a secret value
+                                              Example: get shared api-key
 
-  mykeys set <ecosystem> <secretName> <value>  Set a secret value
-                                              Example: mykeys set shared api-key abc123
-                                                      mykeys set mine my-secret "my value"
+  set <ecosystem> <secretName> <value>      Set a secret value
+                                              Example: set shared api-key abc123
+                                                      set mine my-secret "my value"
 
-  mykeys delete <ecosystem> <secretName>    Delete a secret
-                                              Example: mykeys delete shared api-key
+  delete <ecosystem> <secretName>            Delete a secret
+                                              Example: delete shared api-key
 
 RING MANAGEMENT:
-  mykeys keys list [ringId]                  List keys in ring
-  mykeys keys get <ringId> <key>            Get key value
-  mykeys rings [ringId]                     Get ring information
+  keys list [ringId]                         List keys in ring
+  keys get <ringId> <key>                    Get key value
+  rings [ringId]                             Get ring information
 
 OTHER:
-  mykeys admin                               Show admin information
+  admin                                      Show admin information
   help                                       Show this help message
   clear / cls                                Clear terminal
   theme <name>                               Change theme (linux, mac, windows)
@@ -81,7 +84,7 @@ OTHER:
 NOTES:
   • All secret commands require an <ecosystem> parameter (e.g., "shared", "mine", "gcp")
   • Secrets are organized by ecosystem for better organization
-  • Use quotes around values with spaces: mykeys set shared key "value with spaces"
+  • Use quotes around values with spaces: set shared key "value with spaces"
 
 User: ${email || 'unknown'}
 Ring: ${ringId || 'default'}
@@ -107,22 +110,38 @@ Ring: ${ringId || 'default'}
  */
 async function handleListSecrets(token, ecosystem = null) {
   try {
-    const baseUrl = MYKEYS_URL || '';
-    const url = ecosystem 
-      ? `${baseUrl}/api/v1/secrets/${ecosystem}`
-      : `${baseUrl}/api/v1/secrets`;
+    // In local development, use relative URL to connect to same server
+    // Otherwise use full URL from MYKEYS_URL
+    const isLocalDev = process.env.NODE_ENV === 'development' || 
+                       !process.env.MYKEYS_URL || 
+                       process.env.MYKEYS_URL.includes('localhost') ||
+                       process.env.MYKEYS_URL.includes('127.0.0.1');
+    
+    // If no ecosystem specified, show message asking for one
+    if (!ecosystem) {
+      return { 
+        output: 'Please specify an ecosystem.\n\nUsage: list <ecosystem>\n\nExample: list shared\n         list mine\n         list gcp' 
+      };
+    }
+    
+    // Use relative URL in local dev (connects to same server)
+    // Use full URL in production
+    const url = isLocalDev 
+      ? `/api/v1/secrets/${ecosystem}`
+      : `${MYKEYS_URL || ''}/api/v1/secrets/${ecosystem}`;
     
     const data = await apiRequest('GET', url, null, token);
     
     if (data.secrets && Array.isArray(data.secrets)) {
       if (data.secrets.length === 0) {
-        return { output: 'No secrets found.' };
+        return { output: `No secrets found in ecosystem '${ecosystem}'.` };
       }
       
-      let output = `Found ${data.secrets.length} secret(s):\n\n`;
+      let output = `Found ${data.secrets.length} secret(s) in ecosystem '${ecosystem}':\n\n`;
       data.secrets.forEach(secret => {
-        output += `  ${secret.secret_name || secret.name}\n`;
-        if (secret.ecosystem) {
+        const secretName = secret.secret_name || secret.name || secret;
+        output += `  ${secretName}\n`;
+        if (secret.ecosystem && secret.ecosystem !== ecosystem) {
           output += `    Ecosystem: ${secret.ecosystem}\n`;
         }
         if (secret.created) {
@@ -168,7 +187,7 @@ async function handleGetSecret(token, ecosystem, secretName) {
  */
 async function handleSetSecret(token, ecosystem, secretName, value) {
   if (!ecosystem || !secretName || value === undefined) {
-    return { output: '', error: 'Usage: mykeys set <ecosystem> <secretName> <value>' };
+    return { output: '', error: 'Usage: set <ecosystem> <secretName> <value>' };
   }
   
   try {
@@ -180,7 +199,14 @@ async function handleSetSecret(token, ecosystem, secretName, value) {
       secret_value: value 
     }, token);
     
-    return { output: `Secret '${secretName}' set successfully in ecosystem '${ecosystem}'.` };
+    // Check if API returned a success message
+    if (data.message) {
+      return { output: data.message };
+    } else if (data.success) {
+      return { output: `Secret '${secretName}' set successfully in ecosystem '${ecosystem}'.` };
+    } else {
+      return { output: `Secret '${secretName}' set successfully in ecosystem '${ecosystem}'.` };
+    }
   } catch (error) {
     return { output: '', error: error.message };
   }
@@ -195,8 +221,14 @@ async function handleDeleteSecret(token, ecosystem, secretName) {
   }
   
   try {
-    const baseUrl = MYKEYS_URL || '';
-    const url = `${baseUrl}/api/v1/secrets/${ecosystem}/${secretName}`;
+    const isLocalDev = process.env.NODE_ENV === 'development' || 
+                       !process.env.MYKEYS_URL || 
+                       process.env.MYKEYS_URL.includes('localhost') ||
+                       process.env.MYKEYS_URL.includes('127.0.0.1');
+    
+    const url = isLocalDev 
+      ? `/api/v1/secrets/${ecosystem}/${secretName}`
+      : `${MYKEYS_URL || ''}/api/v1/secrets/${ecosystem}/${secretName}`;
     await apiRequest('DELETE', url, null, token);
     
     return { output: `Secret '${secretName}' deleted successfully from ecosystem '${ecosystem}'.` };
@@ -210,27 +242,87 @@ async function handleDeleteSecret(token, ecosystem, secretName) {
  */
 async function handleAdmin(token) {
   try {
-    const baseUrl = MYKEYS_URL || '';
-    const url = `${baseUrl}/api/admin/info`;
+    const isLocalDev = process.env.NODE_ENV === 'development' || 
+                       !process.env.MYKEYS_URL || 
+                       process.env.MYKEYS_URL.includes('localhost') ||
+                       process.env.MYKEYS_URL.includes('127.0.0.1');
+    
+    const url = isLocalDev 
+      ? `/api/admin/info`
+      : `${MYKEYS_URL || ''}/api/admin/info`;
+    
+    // Debug: log request
+    console.log('[cli-handler] Admin API request:', { url, hasToken: !!token });
+    
     const data = await apiRequest('GET', url, null, token);
     
+    // Debug: log what we received
+    console.log('[cli-handler] Admin API response:', JSON.stringify(data, null, 2));
+    console.log('[cli-handler] Admin API response type:', typeof data);
+    console.log('[cli-handler] Admin API response keys:', data ? Object.keys(data) : 'null/undefined');
+    
     let output = 'Admin Information:\n\n';
-    if (data.user) {
-      output += `User: ${data.user}\n`;
-    }
-    if (data.ringId) {
-      output += `Ring ID: ${data.ringId}\n`;
-    }
-    if (data.roles && Array.isArray(data.roles)) {
-      output += `Roles: ${data.roles.join(', ')}\n`;
-    }
-    if (data.capabilities && Array.isArray(data.capabilities)) {
-      output += `Capabilities: ${data.capabilities.join(', ')}\n`;
+    let hasData = false;
+    
+    // Check for all possible fields
+    if (data && typeof data === 'object') {
+      if (data.email) {
+        output += `Email: ${data.email}\n`;
+        hasData = true;
+      }
+      if (data.primaryRole) {
+        output += `Primary Role: ${data.primaryRole}\n`;
+        hasData = true;
+      }
+      if (data.roles && Array.isArray(data.roles) && data.roles.length > 0) {
+        output += `Roles: ${data.roles.join(', ')}\n`;
+        hasData = true;
+      }
+      if (data.permissions && Array.isArray(data.permissions) && data.permissions.length > 0) {
+        output += `Permissions: ${data.permissions.join(', ')}\n`;
+        hasData = true;
+      }
+      if (data.capabilities && Array.isArray(data.capabilities) && data.capabilities.length > 0) {
+        output += `Capabilities: ${data.capabilities.join(', ')}\n`;
+        hasData = true;
+      }
+      if (data.stats && typeof data.stats === 'object') {
+        output += `\nStats:\n`;
+        if (data.stats.secretsCount !== undefined) {
+          output += `  Secrets: ${data.stats.secretsCount}\n`;
+          hasData = true;
+        }
+        if (data.stats.ecosystemsCount !== undefined) {
+          output += `  Ecosystems: ${data.stats.ecosystemsCount}\n`;
+          hasData = true;
+        }
+      }
+      if (data.tokenInfo && typeof data.tokenInfo === 'object') {
+        output += `\nToken Info:\n`;
+        if (data.tokenInfo.clientId) {
+          output += `  Client ID: ${data.tokenInfo.clientId}\n`;
+          hasData = true;
+        }
+        if (data.tokenInfo.expiresAt) {
+          output += `  Expires: ${data.tokenInfo.expiresAt}\n`;
+          hasData = true;
+        }
+      }
     }
     
-    return { output: output.trim() || JSON.stringify(data, null, 2) };
+    // If no expected fields found, show raw JSON for debugging
+    if (!hasData) {
+      output += `\n⚠️  No admin data found in API response.\n\nRaw API Response:\n${JSON.stringify(data, null, 2)}`;
+    }
+    
+    const finalOutput = output.trim();
+    console.log('[cli-handler] Final admin output:', finalOutput.substring(0, 200));
+    
+    return { output: finalOutput };
   } catch (error) {
-    return { output: '', error: error.message };
+    console.error('[cli-handler] Admin command error:', error);
+    console.error('[cli-handler] Admin command error stack:', error.stack);
+    return { output: '', error: `Failed to get admin info: ${error.message}` };
   }
 }
 
@@ -295,6 +387,11 @@ async function handleRings(token, ringId) {
  */
 function apiRequest(method, url, body, token) {
   return new Promise((resolve, reject) => {
+    // Add timeout to prevent hangs
+    const timeout = setTimeout(() => {
+      reject(new Error('Request timeout - API request took too long'));
+    }, 20000); // 20 second timeout
+    
     // Handle relative URLs (for same-origin requests)
     let urlObj;
     let useRelative = false;
@@ -307,8 +404,15 @@ function apiRequest(method, url, body, token) {
     }
     
     // For relative URLs in Node.js context, construct full URL
+    // In local development, always use localhost instead of production URL
     if (useRelative && typeof window === 'undefined') {
-      const baseUrl = MYKEYS_URL || 'http://localhost:8080';
+      // Detect local development: if NODE_ENV is development or if MYKEYS_URL points to production
+      const isLocalDev = process.env.NODE_ENV === 'development' || 
+                        !process.env.MYKEYS_URL || 
+                        process.env.MYKEYS_URL.includes('localhost') ||
+                        process.env.MYKEYS_URL.includes('127.0.0.1');
+      
+      const baseUrl = isLocalDev ? 'http://localhost:8080' : (MYKEYS_URL || 'http://localhost:8080');
       urlObj = new URL(url, baseUrl);
     } else if (useRelative) {
       // Browser context - use fetch (but this is server-side, so shouldn't happen)
@@ -323,7 +427,8 @@ function apiRequest(method, url, body, token) {
       headers: {
         'Authorization': `Bearer ${token}`,
         'Content-Type': 'application/json'
-      }
+      },
+      timeout: 20000 // Add socket timeout
     };
     
     if (body) {
@@ -346,6 +451,7 @@ function apiRequest(method, url, body, token) {
         }
 
         try {
+          clearTimeout(timeout); // Clear timeout on successful response
           const parsed = JSON.parse(data);
           if (res.statusCode >= 200 && res.statusCode < 300) {
             resolve(parsed);
@@ -367,6 +473,7 @@ function apiRequest(method, url, body, token) {
             reject(new Error(`${errorMsg}${details}`));
           }
         } catch (e) {
+          clearTimeout(timeout); // Clear timeout even on parse error
           // Provide more helpful error message
           const preview = data.substring(0, 200);
           const isHtml = preview.includes('<html') || preview.includes('<!DOCTYPE');
@@ -378,7 +485,16 @@ function apiRequest(method, url, body, token) {
       });
     });
     
-    req.on('error', reject);
+    req.on('error', (err) => {
+      clearTimeout(timeout);
+      reject(err);
+    });
+    
+    req.on('timeout', () => {
+      req.destroy();
+      clearTimeout(timeout);
+      reject(new Error('Request timeout - connection timed out'));
+    });
     
     if (body) {
       req.write(JSON.stringify(body));

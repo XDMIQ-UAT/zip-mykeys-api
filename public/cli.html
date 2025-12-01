@@ -135,12 +135,26 @@
         .terminal-input-line {
             display: flex;
             align-items: center;
-            margin-top: 5px;
+            padding: 10px;
+            border-top: 1px solid #333;
+            background: #0a0a0a;
+            position: sticky;
+            bottom: 0;
+            z-index: 10;
+        }
+        
+        .terminal-input-line.busy {
+            opacity: 0.6;
+        }
+        
+        .terminal-input-line.busy .terminal-input {
+            cursor: wait;
         }
         
         .terminal-prompt-text {
             color: #00ff00;
             margin-right: 8px;
+            white-space: nowrap;
         }
         
         .terminal-input {
@@ -152,6 +166,26 @@
             font-size: 14px;
             outline: none;
             caret-color: #00ff00;
+        }
+        
+        .terminal-input:disabled {
+            opacity: 0.5;
+            cursor: wait;
+        }
+        
+        .command-status {
+            color: #888;
+            font-size: 12px;
+            margin-left: 10px;
+            font-style: italic;
+        }
+        
+        .command-status.running {
+            color: #00ff00;
+        }
+        
+        .command-status.running::before {
+            content: '⏳ ';
         }
         
         /* Login Screen */
@@ -322,9 +356,10 @@
                 </div>
             </div>
             
-            <div class="terminal-input-line">
+            <div class="terminal-input-line" id="terminalInputLine">
                 <span class="terminal-prompt-text" id="promptText">mykeys@online:~$</span>
                 <input type="text" class="terminal-input" id="terminalInput" autocomplete="off" spellcheck="false">
+                <span class="command-status" id="commandStatus"></span>
             </div>
         </div>
     </div>
@@ -384,12 +419,15 @@
         
         async function verifySession() {
             try {
+                // Include email for hash verification (privacy - email not stored server-side)
                 const response = await fetch(`${API_BASE}/api/cli/verify-session`, {
                     method: 'POST',
                     headers: {
                         'Authorization': `Bearer ${sessionToken}`,
-                        'Content-Type': 'application/json'
-                    }
+                        'Content-Type': 'application/json',
+                        'X-User-Email': userEmail || ''
+                    },
+                    body: JSON.stringify({ email: userEmail })
                 });
                 return response.ok;
             } catch (error) {
@@ -422,10 +460,31 @@
                 const data = await response.json();
                 
                 if (response.ok && data.status === 'success') {
-                    // Check if email failed but link is provided (for preview/testing)
+                    // Store email temporarily for magic link verification
+                    // This helps if email is missing from URL
+                    localStorage.setItem('cliPendingEmail', email);
+                    
+                    // Check if link is provided (for local dev/preview/testing)
                     if (data.data && data.data.link) {
-                        const linkMessage = `Email sending failed (preview mode). <a href="${data.data.link}" style="color: #667eea; text-decoration: underline;">Click here to sign in</a>`;
-                        showMessage(messageDiv, linkMessage, 'success');
+                        // Ensure email is in the link URL
+                        let magicLink = data.data.link;
+                        if (!magicLink.includes('email=')) {
+                            // Add email to link if missing
+                            const separator = magicLink.includes('?') ? '&' : '?';
+                            magicLink = `${magicLink}${separator}email=${encodeURIComponent(email)}`;
+                        }
+                        
+                        const linkMessage = data.data.localDev 
+                            ? `<div style="margin: 20px 0;">
+                                <a href="${magicLink}" onclick="event.preventDefault(); window.location.href='${magicLink}'; return false;" style="display: inline-block; background: #667eea; color: white; padding: 12px 24px; text-decoration: none; border-radius: 4px; font-weight: bold; margin-bottom: 10px; cursor: pointer;">🔗 Click here to sign in</a>
+                                <br><br>
+                                <small style="color: #888;">Or copy this link: <code style="background: #1a1a1a; padding: 2px 6px; border-radius: 2px; word-break: break-all;">${magicLink}</code></small>
+                            </div>`
+                            : `<div style="margin: 20px 0;">
+                                <a href="${magicLink}" onclick="event.preventDefault(); window.location.href='${magicLink}'; return false;" style="display: inline-block; background: #667eea; color: white; padding: 12px 24px; text-decoration: none; border-radius: 4px; font-weight: bold; cursor: pointer;">Click here to sign in</a>
+                            </div>`;
+                        messageDiv.innerHTML = linkMessage;
+                        messageDiv.className = 'success-message';
                         sendBtn.textContent = 'Link Generated ✓';
                     } else {
                         showMessage(messageDiv, `Magic link sent to ${email}. Check your email and click the link to sign in.`, 'success');
@@ -451,7 +510,10 @@
         function showTerminal() {
             document.getElementById('loginScreen').style.display = 'none';
             document.getElementById('terminalScreen').style.display = 'flex';
-            document.getElementById('terminalInput').focus();
+            // Small delay to ensure DOM is ready
+            setTimeout(() => {
+                document.getElementById('terminalInput').focus();
+            }, 100);
             updatePrompt();
         }
         
@@ -505,19 +567,32 @@
         
         async function executeCommand(command) {
             const output = document.getElementById('terminalOutput');
+            const terminalInput = document.getElementById('terminalInput');
+            const terminalInputLine = document.getElementById('terminalInputLine');
+            const commandStatus = document.getElementById('commandStatus');
+            
+            // Show command in output
             const inputLine = document.createElement('div');
             inputLine.className = 'terminal-line';
             inputLine.innerHTML = `<span class="terminal-prompt">${document.getElementById('promptText').textContent}</span> ${command}`;
             output.appendChild(inputLine);
             
+            // Set busy state
+            terminalInput.disabled = true;
+            terminalInputLine.classList.add('busy');
+            commandStatus.textContent = 'Running...';
+            commandStatus.classList.add('running');
+            
             // Handle local commands
             if (command === 'help') {
                 showHelp(output);
+                resetInputState();
                 return;
             }
             
             if (command === 'clear' || command === 'cls') {
                 output.innerHTML = '';
+                resetInputState();
                 return;
             }
             
@@ -529,19 +604,56 @@
                 } else {
                     addOutput(output, `Invalid theme. Available: linux, mac, windows`, 'error');
                 }
+                resetInputState();
                 return;
             }
             
-            // Send command to server
+            // Validate command format before sending to server
+            const parts = command.trim().split(/\s+/);
+            const cmd = parts[0];
+            const validCommands = ['list', 'get', 'set', 'delete', 'remove', 'admin', 'keys', 'rings', 'secrets'];
+            const validMykeysCommands = ['mykeys'];
+            
+            // Check if it's a valid direct command or starts with 'mykeys'
+            const isValidCommand = validCommands.includes(cmd) || 
+                                  validMykeysCommands.includes(cmd) ||
+                                  cmd === 'help';
+            
+            if (!isValidCommand && cmd.length > 0) {
+                addOutput(output, `Unknown command: ${cmd}. Type 'help' for available commands.`, 'error');
+                resetInputState();
+                return;
+            }
+            
+            // Send command to server with timeout
             try {
-                const response = await fetch(`${API_BASE}/api/cli/execute`, {
+                // Create a timeout promise
+                const timeoutPromise = new Promise((_, reject) => 
+                    setTimeout(() => reject(new Error('Request timeout - command took too long to execute')), 30000)
+                );
+                
+                // Race between fetch and timeout
+                // Include email in request for privacy (email hash verification)
+                // Email is required - we hash it and compare with session hash
+                const fetchPromise = fetch(`${API_BASE}/api/cli/execute`, {
                     method: 'POST',
                     headers: {
                         'Authorization': `Bearer ${sessionToken}`,
-                        'Content-Type': 'application/json'
+                        'Content-Type': 'application/json',
+                        'X-User-Email': userEmail || '' // Include email for hash verification
                     },
-                    body: JSON.stringify({ command })
+                    body: JSON.stringify({ 
+                        command,
+                        email: userEmail // Also include in body for hash verification
+                    })
                 });
+                
+                const response = await Promise.race([fetchPromise, timeoutPromise]);
+                
+                // Check if response is valid (not a timeout error)
+                if (!response || !response.json) {
+                    throw new Error('Request timeout - command took too long to execute');
+                }
                 
                 const data = await response.json();
                 
@@ -553,13 +665,44 @@
                         addOutput(output, data.data.error, 'error');
                     }
                 } else {
-                    addOutput(output, data.message || 'Command failed', 'error');
+                    // Check if authentication failed
+                    if (response.status === 401 || data.message?.includes('Invalid credentials') || data.message?.includes('Authentication')) {
+                        addOutput(output, 'Session expired. Please log in again.', 'error');
+                        clearSession();
+                        // Show login screen again
+                        const loginScreen = document.getElementById('loginScreen');
+                        const terminalScreen = document.getElementById('terminalScreen');
+                        if (loginScreen && terminalScreen) {
+                            loginScreen.style.display = 'flex';
+                            terminalScreen.style.display = 'none';
+                            const loginMessage = document.getElementById('loginMessage');
+                            if (loginMessage) {
+                                showMessage(loginMessage, 'Your session has expired. Please request a new magic link.', 'error');
+                            }
+                        }
+                    } else {
+                        addOutput(output, data.message || 'Command failed', 'error');
+                    }
                 }
             } catch (error) {
                 addOutput(output, `Error: ${error.message}`, 'error');
+            } finally {
+                resetInputState();
             }
             
             output.scrollTop = output.scrollHeight;
+        }
+        
+        function resetInputState() {
+            const terminalInput = document.getElementById('terminalInput');
+            const terminalInputLine = document.getElementById('terminalInputLine');
+            const commandStatus = document.getElementById('commandStatus');
+            
+            terminalInput.disabled = false;
+            terminalInputLine.classList.remove('busy');
+            commandStatus.textContent = '';
+            commandStatus.classList.remove('running');
+            terminalInput.focus();
         }
         
         function showHelp(output) {
@@ -569,19 +712,29 @@ Available commands:
   clear / cls       Clear terminal
   theme <name>      Change theme (linux, mac, windows)
 
-MyKeys commands:
-  mykeys list [ecosystem]                    List all secrets (optionally filtered by ecosystem)
-  mykeys get <ecosystem> <secretName>        Get a secret value
-  mykeys set <ecosystem> <secretName> <value>  Set a secret value
-  mykeys delete <ecosystem> <secretName>     Delete a secret
-  mykeys admin                               Show admin information
+MyKeys commands (you can use with or without "mykeys" prefix):
+
+DIRECT COMMANDS (no prefix needed):
+  list [ecosystem]                    List all secrets
+  get <ecosystem> <secretName>        Get a secret value
+  set <ecosystem> <secretName> <value>  Set a secret value
+  delete <ecosystem> <secretName>     Delete a secret
+  admin                               Show admin information
+
+WITH "mykeys" PREFIX (also supported):
+  mykeys list [ecosystem]
+  mykeys get <ecosystem> <secretName>
+  mykeys set <ecosystem> <secretName> <value>
+  mykeys delete <ecosystem> <secretName>
+  mykeys admin
 
 Examples:
-  mykeys list                                 List all secrets
-  mykeys list shared                          List secrets in "shared" ecosystem
-  mykeys get shared api-key                   Get "api-key" from "shared" ecosystem
-  mykeys set shared api-key abc123            Set "api-key" in "shared" ecosystem to "abc123"
-  mykeys set mine my-secret "value with spaces"  Set secret with spaces (use quotes)
+  list                                 List all secrets
+  list shared                          List secrets in "shared" ecosystem
+  get shared api-key                   Get "api-key" from "shared" ecosystem
+  set shared api-key abc123            Set "api-key" in "shared" ecosystem to "abc123"
+  set mine my-secret "value with spaces"  Set secret with spaces (use quotes)
+  admin                                Show admin information
 
 Note: All secret commands require an <ecosystem> parameter (e.g., "shared", "mine", "gcp")
             `.trim();
@@ -636,19 +789,62 @@ Note: All secret commands require an <ecosystem> parameter (e.g., "shared", "min
         
         async function verifyMagicLink(token) {
             try {
+                // Small delay to ensure localStorage is available
+                await new Promise(resolve => setTimeout(resolve, 100));
+                
+                // Get email from URL (should be included in magic link)
+                const urlParams = new URLSearchParams(window.location.search);
+                let email = urlParams.get('email');
+                
+                console.log('[verifyMagicLink] Email from URL:', email);
+                
+                // If email not in URL, try to get from pending email (stored when link was generated)
+                if (!email) {
+                    email = localStorage.getItem('cliPendingEmail');
+                    console.log('[verifyMagicLink] Email from localStorage:', email);
+                }
+                
+                // If still no email, get from input field
+                if (!email) {
+                    const emailInput = document.getElementById('emailInput');
+                    email = emailInput ? emailInput.value.trim() : null;
+                    console.log('[verifyMagicLink] Email from input:', email);
+                }
+                
+                if (!email) {
+                    console.error('[verifyMagicLink] No email found anywhere');
+                    showMessage(document.getElementById('loginMessage'), 'Email is required to verify magic link. Please enter your email address in the form below.', 'error');
+                    // Show login form if email missing
+                    document.getElementById('loginScreen').style.display = 'flex';
+                    document.getElementById('terminalScreen').style.display = 'none';
+                    return;
+                }
+                
+                // Pre-fill email input if it's empty
+                const emailInput = document.getElementById('emailInput');
+                if (emailInput && !emailInput.value) {
+                    emailInput.value = email;
+                }
+                
+                console.log('[verifyMagicLink] Using email:', email);
+                
                 const response = await fetch(`${API_BASE}/api/cli/verify-magic-link`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ token })
+                    body: JSON.stringify({ token, email: email.trim().toLowerCase() })
                 });
                 
                 const data = await response.json();
                 
                 if (response.ok && data.status === 'success') {
                     sessionToken = data.data.sessionToken;
-                    userEmail = data.data.email;
+                    // Email is NOT returned from server (privacy)
+                    // Store email locally - user must provide it in each request
+                    // Get email from the request we just sent
+                    userEmail = email.trim().toLowerCase(); // Use email from our request
                     localStorage.setItem('cliSessionToken', sessionToken);
-                    localStorage.setItem('cliUserEmail', userEmail);
+                    localStorage.setItem('cliUserEmail', userEmail); // Store locally for future requests
+                    localStorage.removeItem('cliPendingEmail'); // Clear pending email after successful verification
                     
                     // Clear URL
                     window.history.replaceState({}, document.title, '/cli.html');
