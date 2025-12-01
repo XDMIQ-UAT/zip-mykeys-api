@@ -58,7 +58,7 @@ module.exports = defineConfig({
   /* Run your local dev server before starting the tests */
   webServer: {
     command: process.env.CI ? 'npm start' : 'npm run dev:marketing',
-    url: process.env.CI ? 'http://localhost:8080' : 'http://localhost:5173',
+    url: process.env.CI ? 'http://localhost:8080/health' : 'http://localhost:5173',
     reuseExistingServer: !process.env.CI,
     timeout: 60 * 1000, // Reduced from 120s to 60s - server should start faster
     startupTimeout: 30 * 1000, // Wait up to 30s for server to be ready
