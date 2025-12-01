@@ -154,8 +154,12 @@ async function handleSetSecret(token, ecosystem, secretName, value) {
   
   try {
     const baseUrl = MYKEYS_URL || '';
-    const url = `${baseUrl}/api/v1/secrets/${ecosystem}/${secretName}`;
-    const data = await apiRequest('PUT', url, { secret_value: value }, token);
+    // Use POST to /api/v1/secrets/:ecosystem with secret_name and secret_value in body
+    const url = `${baseUrl}/api/v1/secrets/${ecosystem}`;
+    const data = await apiRequest('POST', url, { 
+      secret_name: secretName,
+      secret_value: value 
+    }, token);
     
     return { output: `Secret '${secretName}' set successfully in ecosystem '${ecosystem}'.` };
   } catch (error) {

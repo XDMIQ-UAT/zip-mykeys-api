@@ -4052,6 +4052,8 @@ app.post('/api/cli/execute', authenticate, async (req, res) => {
     // Handle mykeys commands
     if (cmd === 'mykeys' || cmd.startsWith('mykeys')) {
       const mykeysCmd = parts[1] || 'help';
+      // Remove the command itself from args (args currently includes "set", "get", etc.)
+      const mykeysArgs = parts.slice(2);
       
       try {
         // Import CLI handler
@@ -4068,7 +4070,7 @@ app.post('/api/cli/execute', authenticate, async (req, res) => {
           return sendResponse(res, 401, 'failure', null, 'Token not found');
         }
         
-        const result = await executeCLICommand(mykeysCmd, args, {
+        const result = await executeCLICommand(mykeysCmd, mykeysArgs, {
           email: userEmail,
           ringId,
           token: token
