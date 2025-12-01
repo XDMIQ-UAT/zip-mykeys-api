@@ -1,10 +1,19 @@
-name: Tests
+name: Full Tests (Unit + E2E)
 
 on:
   push:
-    # Trigger on all branches - unit tests run everywhere, E2E only on master/main/PRs
+    branches: [master, main]
+    # Only run full tests on main branches to save CI time
   pull_request:
     branches: [master, main]
+  workflow_dispatch:
+    # Allow manual triggering for full test suite
+    inputs:
+      skip_e2e:
+        description: 'Skip E2E tests (faster)'
+        required: false
+        default: 'false'
+        type: boolean
 
 # Cancel in-progress runs when a new commit is pushed to the same PR/branch
 concurrency:
@@ -52,9 +61,14 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15  # Prevent infinite hangs
     
-    # Only run E2E tests on PRs and main/master branch pushes (skip on feature branch pushes)
-    # This reduces CI time while ensuring PRs and main branch are fully tested
-    if: github.event_name == 'pull_request' || github.ref == 'refs/heads/master' || github.ref == 'refs/heads/main'
+    # Skip E2E tests if manually requested via workflow_dispatch input
+    # Otherwise run on PRs and main/master branch pushes
+    if: |
+      (github.event_name == 'pull_request' || 
+       github.ref == 'refs/heads/master' || 
+       github.ref == 'refs/heads/main' ||
+       github.event_name == 'workflow_dispatch') &&
+      (github.event_name != 'workflow_dispatch' || github.event.inputs.skip_e2e != 'true')
     
     steps:
       - name: Checkout code

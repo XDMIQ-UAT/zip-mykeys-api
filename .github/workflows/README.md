@@ -13,12 +13,26 @@ This repository uses a **hybrid CI/CD approach**:
 ✅ **Vercel handles all builds and deployments** via connected repository  
 ✅ **No conflicts** - they serve different purposes
 
-## Workflow: `.github/workflows/test.yml`
+## Workflows
 
-### Triggers
-- **Push to `master`/`main`**: Runs unit tests + E2E tests
-- **Pull Requests**: Runs unit tests + E2E tests
-- **Feature branch pushes**: Only unit tests (E2E skipped for speed)
+### 1. Quick Tests: `.github/workflows/test-quick.yml`
+**Fast feedback for development** - Unit tests only (~1 minute)
+
+- **Triggers**: All branch pushes
+- **Runs**: Unit tests only
+- **Use case**: Quick validation while developing, testing workflow changes
+- **Status check**: `Quick Tests (Unit Only) / unit-tests`
+
+### 2. Full Tests: `.github/workflows/test.yml`
+**Complete test suite** - Unit + E2E tests (~10-15 minutes)
+
+- **Triggers**: 
+  - Push to `master`/`main` branches
+  - Pull requests targeting `master`/`main`
+  - Manual trigger (with option to skip E2E)
+- **Runs**: Unit tests + E2E tests
+- **Use case**: PR validation, pre-merge checks, production readiness
+- **Status check**: `Full Tests (Unit + E2E) / test-summary`
 
 ### Jobs
 
@@ -67,12 +81,13 @@ This repository uses a **hybrid CI/CD approach**:
 Quick setup:
 1. Go to Vercel Dashboard → Project Settings → Git
 2. Enable **"Wait for GitHub Actions checks"**
-3. Add required status check: **`Tests / test-summary`**
+3. Add required status check: **`Full Tests (Unit + E2E) / test-summary`**
 
 **Status checks created:**
-- `Tests / unit-tests` - Unit tests (Jest)
-- `Tests / e2e-tests` - E2E tests (Playwright)
-- `Tests / test-summary` - Overall summary (recommended for Vercel wait)
+- `Quick Tests (Unit Only) / unit-tests` - Quick unit tests (fast feedback)
+- `Full Tests (Unit + E2E) / unit-tests` - Unit tests (full suite)
+- `Full Tests (Unit + E2E) / e2e-tests` - E2E tests (Playwright)
+- `Full Tests (Unit + E2E) / test-summary` - Overall summary (recommended for Vercel wait)
 
 ## Environment Variables
 
