@@ -553,7 +553,17 @@
                         addOutput(output, data.data.error, 'error');
                     }
                 } else {
-                    addOutput(output, data.message || 'Command failed', 'error');
+                    // Check if authentication failed
+                    if (response.status === 401 || data.message?.includes('Invalid credentials') || data.message?.includes('Authentication')) {
+                        addOutput(output, 'Session expired. Please log in again.', 'error');
+                        clearSession();
+                        // Show login form again
+                        document.getElementById('loginForm').style.display = 'block';
+                        document.getElementById('terminal').style.display = 'none';
+                        showMessage(document.getElementById('loginMessage'), 'Your session has expired. Please request a new magic link.', 'error');
+                    } else {
+                        addOutput(output, data.message || 'Command failed', 'error');
+                    }
                 }
             } catch (error) {
                 addOutput(output, `Error: ${error.message}`, 'error');
