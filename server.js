@@ -931,7 +931,9 @@ app.post('/api/v1/secrets/:ecosystem', authenticate, async (req, res) => {
       ...(description && { description: description })
     };
     
+    console.log(`[secret-storage] Storing secret: ${secretName} in ecosystem: ${ecosystem}, ringId: ${ringId}`);
     const result = await storeSecret(secretName, secretValueStr, labels, ringId);
+    console.log(`[secret-storage] Secret stored successfully: ${secretName}`);
     
     // Register key in ring's key list (content belongs to ring)
     // Also track analytics for viral expansion and resource planning
@@ -939,7 +941,9 @@ app.post('/api/v1/secrets/:ecosystem', authenticate, async (req, res) => {
     if (ringId) {
       const creatorEmail = userEmail || null;
       try {
+        console.log(`[secret-storage] Registering ring key: ${secretName} in ring: ${ringId}`);
         await registerRingKey(ringId, secretName, secretValueStr, labels, creatorEmail);
+        console.log(`[secret-storage] Ring key registered successfully`);
       } catch (registerError) {
         // Log but don't fail - secret is stored, registration is optional
         console.error('[secret-storage] Error registering ring key (non-fatal):', registerError.message || registerError);
@@ -963,13 +967,16 @@ app.post('/api/v1/secrets/:ecosystem', authenticate, async (req, res) => {
       }
     }
     
-    res.json({
+    console.log(`[secret-storage] Sending success response for secret: ${secret_name}`);
+    const responseData = {
       success: true,
       secret_name: secret_name,
       ecosystem: ecosystem,
       ringId: ringId || null,
       message: `Secret ${secret_name} ${result.created ? 'created' : 'updated'} successfully. Content is accessible to all ring members.`
-    });
+    };
+    console.log(`[secret-storage] Response data:`, JSON.stringify(responseData));
+    res.json(responseData);
   } catch (error) {
     console.error(`Error storing secret ${req.params.ecosystem}:`, error);
     
