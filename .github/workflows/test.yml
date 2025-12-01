@@ -2,7 +2,7 @@ name: Tests
 
 on:
   push:
-    branches: [master, main, 'fix/**', 'feature/**']
+    # Trigger on all branches - unit tests run everywhere, E2E only on master/main/PRs
   pull_request:
     branches: [master, main]
 
