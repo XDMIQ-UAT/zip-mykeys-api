@@ -3985,9 +3985,9 @@ app.post('/api/cli/send-magic-link', async (req, res) => {
     // This is needed for email sending - deleted after verification
     await storage.set(`cli:magic-link-email:${magicToken}`, normalizedEmail, { ex: 900 });
     
-    // Generate magic link URL
+    // Generate magic link URL (include email for automatic verification)
     const baseUrl = req.protocol + '://' + req.get('host');
-    const magicLink = `${baseUrl}/cli.html?token=${magicToken}`;
+    const magicLink = `${baseUrl}/cli.html?token=${magicToken}&email=${encodeURIComponent(normalizedEmail)}`;
     
     // Send magic link email
     try {

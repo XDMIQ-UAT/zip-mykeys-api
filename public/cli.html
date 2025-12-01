@@ -463,8 +463,14 @@
                     // Check if link is provided (for local dev/preview/testing)
                     if (data.data && data.data.link) {
                         const linkMessage = data.data.localDev 
-                            ? `Magic link generated (local dev mode). <a href="${data.data.link}" target="_blank" style="color: #00ff00; text-decoration: underline; font-weight: bold;">Click here to sign in</a><br><br><small style="color: #888;">Or copy this link: <code style="background: #1a1a1a; padding: 2px 6px; border-radius: 2px;">${data.data.link}</code></small>`
-                            : `Email sending failed (preview mode). <a href="${data.data.link}" target="_blank" style="color: #667eea; text-decoration: underline;">Click here to sign in</a>`;
+                            ? `<div style="margin: 20px 0;">
+                                <a href="${data.data.link}" style="display: inline-block; background: #667eea; color: white; padding: 12px 24px; text-decoration: none; border-radius: 4px; font-weight: bold; margin-bottom: 10px;">🔗 Click here to sign in</a>
+                                <br><br>
+                                <small style="color: #888;">Or copy this link: <code style="background: #1a1a1a; padding: 2px 6px; border-radius: 2px; word-break: break-all;">${data.data.link}</code></small>
+                            </div>`
+                            : `<div style="margin: 20px 0;">
+                                <a href="${data.data.link}" style="display: inline-block; background: #667eea; color: white; padding: 12px 24px; text-decoration: none; border-radius: 4px; font-weight: bold;">Click here to sign in</a>
+                            </div>`;
                         messageDiv.innerHTML = linkMessage;
                         messageDiv.className = 'success-message';
                         sendBtn.textContent = 'Link Generated ✓';
@@ -771,19 +777,21 @@ Note: All secret commands require an <ecosystem> parameter (e.g., "shared", "min
         
         async function verifyMagicLink(token) {
             try {
-                // Get email from URL or prompt user
-                // Email is required for privacy - we hash it and compare with magic link hash
+                // Get email from URL (should be included in magic link)
                 const urlParams = new URLSearchParams(window.location.search);
                 let email = urlParams.get('email');
                 
-                // If email not in URL, get from input field or prompt
+                // If email not in URL, get from input field
                 if (!email) {
                     const emailInput = document.getElementById('emailInput');
                     email = emailInput ? emailInput.value.trim() : null;
                 }
                 
                 if (!email) {
-                    showMessage(document.getElementById('loginMessage'), 'Email is required to verify magic link. Please enter your email address.', 'error');
+                    showMessage(document.getElementById('loginMessage'), 'Email is required to verify magic link. Please enter your email address in the form below.', 'error');
+                    // Show login form if email missing
+                    document.getElementById('loginScreen').style.display = 'flex';
+                    document.getElementById('terminalScreen').style.display = 'none';
                     return;
                 }
                 
