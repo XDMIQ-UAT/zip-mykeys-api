@@ -67,3 +67,4 @@ If you want to use GitHub Actions instead:
 - 🎯 **Result**: Single deployment per commit
 
 
+

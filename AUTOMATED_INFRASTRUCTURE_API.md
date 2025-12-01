@@ -302,3 +302,4 @@ POST /api/infrastructure/:entityId/invite-human
 
 This is the foundation for **automated business infrastructure that AI agents will want to use**! 🚀
 
+

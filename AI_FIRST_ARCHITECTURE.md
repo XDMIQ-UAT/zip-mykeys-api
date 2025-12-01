@@ -210,3 +210,4 @@ The simplifications we made (admin/member, shared/private) actually make it **be
 
 This is a solid foundation for an AI-first credential management platform! 🚀
 
+

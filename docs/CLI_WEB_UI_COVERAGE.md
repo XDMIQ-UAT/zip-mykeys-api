@@ -146,3 +146,4 @@ fetch('/api/rings/company-ring/keys/api-key/vault', {
 All functionality is accessible via CLI and API. Web UI pages for ring management, key management, privacy vault, and secret management can be added as needed.
 
 
+

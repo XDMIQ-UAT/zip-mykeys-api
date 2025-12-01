@@ -140,3 +140,4 @@ npm run test:all  # Unit + E2E (after Jest setup)
 5. **Run all tests** and fix any failures
 6. **Then commit** ✅
 
+
