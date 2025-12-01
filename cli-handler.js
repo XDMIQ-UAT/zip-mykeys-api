@@ -365,6 +365,11 @@ async function handleRings(token, ringId) {
  */
 function apiRequest(method, url, body, token) {
   return new Promise((resolve, reject) => {
+    // Add timeout to prevent hangs
+    const timeout = setTimeout(() => {
+      reject(new Error('Request timeout - API request took too long'));
+    }, 20000); // 20 second timeout
+    
     // Handle relative URLs (for same-origin requests)
     let urlObj;
     let useRelative = false;
@@ -393,7 +398,8 @@ function apiRequest(method, url, body, token) {
       headers: {
         'Authorization': `Bearer ${token}`,
         'Content-Type': 'application/json'
-      }
+      },
+      timeout: 20000 // Add socket timeout
     };
     
     if (body) {
@@ -416,6 +422,7 @@ function apiRequest(method, url, body, token) {
         }
 
         try {
+          clearTimeout(timeout); // Clear timeout on successful response
           const parsed = JSON.parse(data);
           if (res.statusCode >= 200 && res.statusCode < 300) {
             resolve(parsed);
@@ -437,6 +444,7 @@ function apiRequest(method, url, body, token) {
             reject(new Error(`${errorMsg}${details}`));
           }
         } catch (e) {
+          clearTimeout(timeout); // Clear timeout even on parse error
           // Provide more helpful error message
           const preview = data.substring(0, 200);
           const isHtml = preview.includes('<html') || preview.includes('<!DOCTYPE');
@@ -448,7 +456,16 @@ function apiRequest(method, url, body, token) {
       });
     });
     
-    req.on('error', reject);
+    req.on('error', (err) => {
+      clearTimeout(timeout);
+      reject(err);
+    });
+    
+    req.on('timeout', () => {
+      req.destroy();
+      clearTimeout(timeout);
+      reject(new Error('Request timeout - connection timed out'));
+    });
     
     if (body) {
       req.write(JSON.stringify(body));
