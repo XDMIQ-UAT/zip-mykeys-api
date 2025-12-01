@@ -180,7 +180,7 @@ const authenticate = async (req, res, next) => {
       try {
         const kv = getStorage();
         if (kv) {
-          const sessionData = await storage.get(`cli:session:${token}`);
+          const sessionData = await kv.get(`cli:session:${token}`);
           if (sessionData) {
             // Handle both string and object responses from storage
             const session = typeof sessionData === 'string' ? JSON.parse(sessionData) : sessionData;
@@ -192,13 +192,13 @@ const authenticate = async (req, res, next) => {
             } else {
               // Check expiration
               if (Date.now() > session.expiresAt) {
-                await storage.del(`cli:session:${token}`);
+                await kv.del(`cli:session:${token}`);
                 return sendResponse(res, 401, 'failure', null, 'Session expired');
               }
               
               // Update last activity
               session.lastActivity = Date.now();
-              await storage.set(`cli:session:${token}`, JSON.stringify(session), { ex: 86400 });
+              await kv.set(`cli:session:${token}`, JSON.stringify(session), { ex: 86400 });
               
               req.authType = 'cli-session';
               req.userEmail = session.email;
@@ -1639,6 +1639,39 @@ const requireAdminRole = async (req, res, next) => {
     }
     
     const token = authHeader.substring(7);
+    
+    // Try CLI session token first (for web CLI)
+    if (token.length >= 32) {
+      try {
+        const storage = getStorage();
+        if (storage) {
+          const sessionData = await storage.get(`cli:session:${token}`);
+          if (sessionData) {
+            const session = typeof sessionData === 'string' ? JSON.parse(sessionData) : sessionData;
+            
+            // Check expiration
+            if (session.email && session.expiresAt && Date.now() <= session.expiresAt) {
+              // Check if user has admin role
+              const userRoles = await getUserRoles(session.email);
+              if (userRoles.includes('owner') || userRoles.includes('architect')) {
+                req.userEmail = session.email;
+                req.userRoles = userRoles;
+                req.authType = 'cli-session';
+                req.token = token;
+                return next();
+              } else {
+                return sendResponse(res, 403, 'failure', null, 'Forbidden', 'Only owners and architects can access admin endpoints');
+              }
+            }
+          }
+        }
+      } catch (err) {
+        // Continue to MCP token check
+        console.error('[requireAdminRole] Error checking CLI session:', err.message);
+      }
+    }
+    
+    // Fall back to MCP token validation
     const validation = await validateMCPToken(token);
     
     if (!validation.valid) {
