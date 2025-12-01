@@ -32,12 +32,14 @@ jobs:
       - name: Upload test results
         if: always()
         uses: actions/upload-artifact@v4
+        continue-on-error: true
         with:
           name: unit-test-results
           path: |
             test-results/
             coverage/
           retention-days: 7
+          if-no-files-found: ignore
 
   e2e-tests:
     name: E2E Tests
