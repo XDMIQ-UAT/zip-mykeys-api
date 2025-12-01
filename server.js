@@ -182,25 +182,39 @@ const authenticate = async (req, res, next) => {
         if (kv) {
           const sessionData = await kv.get(`cli:session:${token}`);
           if (sessionData) {
-            const session = JSON.parse(sessionData);
+            // Handle both string and object responses from KV
+            const session = typeof sessionData === 'string' ? JSON.parse(sessionData) : sessionData;
             
-            // Check expiration
-            if (Date.now() > session.expiresAt) {
-              await kv.del(`cli:session:${token}`);
-              return sendResponse(res, 401, 'failure', null, 'Session expired');
+            // Validate session structure
+            if (!session.email || !session.expiresAt) {
+              console.error('[auth] Invalid CLI session data structure:', session);
+              // Continue to MCP token check
+            } else {
+              // Check expiration
+              if (Date.now() > session.expiresAt) {
+                await kv.del(`cli:session:${token}`);
+                return sendResponse(res, 401, 'failure', null, 'Session expired');
+              }
+              
+              // Update last activity
+              session.lastActivity = Date.now();
+              await kv.set(`cli:session:${token}`, JSON.stringify(session), { ex: 86400 });
+              
+              req.authType = 'cli-session';
+              req.userEmail = session.email;
+              req.token = token; // Store token for CLI handler
+              try {
+                req.ringId = await getRingForUser(session.email, true);
+              } catch (ringError) {
+                console.error('[auth] Error getting ring for CLI user:', ringError);
+                req.ringId = 'default'; // Fallback to default ring
+              }
+              return next();
             }
-            
-            // Update last activity
-            session.lastActivity = Date.now();
-            await kv.set(`cli:session:${token}`, JSON.stringify(session), { ex: 86400 });
-            
-            req.authType = 'cli-session';
-            req.userEmail = session.email;
-            req.ringId = await getRingForUser(session.email, true);
-            return next();
           }
         }
       } catch (err) {
+        console.error('[auth] Error validating CLI session token:', err.message);
         // Continue to MCP token check
       }
 
@@ -4037,10 +4051,12 @@ app.post('/api/cli/execute', authenticate, async (req, res) => {
       try {
         // Import CLI handler
         const { executeCLICommand } = require('./cli-handler');
+        // Use req.token if available (set by authenticate middleware), otherwise extract from header
+        const token = req.token || req.headers.authorization?.replace('Bearer ', '');
         const result = await executeCLICommand(mykeysCmd, args, {
           email: userEmail,
           ringId,
-          token: req.headers.authorization?.replace('Bearer ', '')
+          token: token
         });
         
         output = result.output || '';
