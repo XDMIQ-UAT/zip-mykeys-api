@@ -123,7 +123,7 @@ async function setUserRoles(identifier, role, ringId = null) {
     // Fallback to legacy global roles
     const kv = getStorage();
     if (!kv) {
-      throw new Error('KV storage not available');
+      throw new Error('Storage service not available');
     }
     
     const rolesData = await kv.get(ROLES_KEY);

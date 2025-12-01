@@ -339,31 +339,30 @@ function decrypt(encrypted, iv, authTag) {
   return decrypted;
 }
 
-// Helper function to get secret from GCP Secret Manager
-// Helper function to get secret from Redis/KV (ring-scoped)
-async function getSecretFromRedis(secretName, ringId = null) {
-  const kvClient = getStorage();
-  if (!kvClient) return null;
+// Helper function to get secret from storage (ring-scoped)
+async function getSecretFromStorage(secretName, ringId = null) {
+  const storage = getStorage();
+  if (!storage) return null;
   
   try {
     // Ring-scoped secret key: ring:{ringId}:secret:{secretName}
     const key = ringId ? `ring:${ringId}:secret:${secretName}` : `secret:${secretName}`;
-    const value = await kvClient.get(key);
+    const value = await storage.get(key);
     if (value === null) {
-      console.log(`[INFO] Secret ${secretName} not found in KV${ringId ? ` for ring ${ringId}` : ''}`);
+      console.log(`[INFO] Secret ${secretName} not found${ringId ? ` for ring ${ringId}` : ''}`);
       return null;
     }
     return value;
   } catch (error) {
-    console.error(`[ERROR] Failed to get secret ${secretName} from KV:`, error.message);
+    console.error(`[ERROR] Failed to get secret ${secretName}:`, error.message);
     return null;
   }
 }
 
-// Helper function to store secret in Redis (ring-scoped)
-async function storeSecretInRedis(secretName, secretValue, labels = {}, ringId = null) {
-  const kvClient = getStorage();
-  if (!kvClient) throw new Error('KV client not initialized');
+// Helper function to store secret in storage (ring-scoped)
+async function storeSecretInStorage(secretName, secretValue, labels = {}, ringId = null) {
+  const storage = getStorage();
+  if (!storage) throw new Error('Storage service not available');
   
   try {
     // Ring-scoped secret key: ring:{ringId}:secret:{secretName}
@@ -371,15 +370,15 @@ async function storeSecretInRedis(secretName, secretValue, labels = {}, ringId =
     const metaKey = ringId ? `ring:${ringId}:secret:${secretName}:meta` : `secret:${secretName}:meta`;
     
     // Check if secret exists
-    const existing = await kvClient.get(key);
+    const existing = await storage.get(key);
     const exists = existing !== null;
     
     // Store secret value
-    await kvClient.set(key, secretValue);
+    await storage.set(key, secretValue);
     
     // Store metadata if labels provided
     if (Object.keys(labels).length > 0) {
-      await kvClient.set(metaKey, JSON.stringify({
+      await storage.set(metaKey, JSON.stringify({
         ...labels,
         ringId: ringId || null,
         updatedAt: new Date().toISOString()
@@ -388,24 +387,20 @@ async function storeSecretInRedis(secretName, secretValue, labels = {}, ringId =
     
     return { created: !exists };
   } catch (error) {
-    console.error(`Error storing secret ${secretName} in KV:`, error.message);
+    console.error(`Error storing secret ${secretName}:`, error.message);
     throw error;
   }
 }
 
-// GCP Secret Manager functions removed - using Vercel KV (Redis) exclusively
-
-// Unified secret getter - Read from Redis (ring-scoped)
+// Unified secret getter - Read from storage (ring-scoped)
 async function getSecret(secretName, ringId = null) {
-  // Read from Redis (ring-scoped)
-  const value = await getSecretFromRedis(secretName, ringId);
+  const value = await getSecretFromStorage(secretName, ringId);
   return value;
 }
 
-// Unified secret setter - Store in Redis (ring-scoped)
+// Unified secret setter - Store in storage (ring-scoped)
 async function storeSecret(secretName, secretValue, labels = {}, ringId = null) {
-  // Store in Redis (ring-scoped)
-  const result = await storeSecretInRedis(secretName, secretValue, labels, ringId);
+  const result = await storeSecretInStorage(secretName, secretValue, labels, ringId);
   return result;
 }
 
