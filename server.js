@@ -3966,13 +3966,19 @@ app.post('/api/cli/verify-magic-link', async (req, res) => {
       lastActivity: Date.now()
     }), { ex: 86400 }); // 24 hours
     
-    // Get user's ring for isolation
-    const ringId = await getRingForUser(linkData.email, true);
+    // Get user's ring for isolation (don't fail if this errors)
+    let ringId = null;
+    try {
+      ringId = await getRingForUser(linkData.email, true);
+    } catch (ringError) {
+      console.error('[cli] Error getting ring for user (non-fatal):', ringError);
+      // Continue without ringId - session is still valid
+    }
     
     return sendResponse(res, 200, 'success', {
       sessionToken,
       email: linkData.email,
-      ringId
+      ringId: ringId || 'default'
     });
   } catch (error) {
     console.error('[cli] Error verifying magic link:', error);

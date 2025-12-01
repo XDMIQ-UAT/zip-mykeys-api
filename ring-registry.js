@@ -327,11 +327,18 @@ async function getRingForUser(email = null, createAnonymous = true) {
           [email]: ['admin'] // User is admin of their own ring
         });
         
-        // Register in registry
-        await registerRing(userRingId, {
-          publicName: email.split('@')[0], // Use username part as public name
-          capabilities: ['key-management', 'token-management'],
-        });
+        // Register in registry (don't fail if already registered)
+        try {
+          await registerRing(userRingId, {
+            publicName: email.split('@')[0], // Use username part as public name
+            capabilities: ['key-management', 'token-management'],
+          });
+        } catch (regError) {
+          // Ignore if ring is already registered
+          if (!regError.message.includes('does not exist')) {
+            console.warn('[ring-registry] Warning registering ring (may already exist):', regError.message);
+          }
+        }
         
         return ring.id;
       } catch (error) {
