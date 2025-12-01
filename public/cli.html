@@ -826,6 +826,7 @@ Note: All secret commands require an <ecosystem> parameter (e.g., "shared", "min
                     userEmail = email.trim().toLowerCase(); // Use email from our request
                     localStorage.setItem('cliSessionToken', sessionToken);
                     localStorage.setItem('cliUserEmail', userEmail); // Store locally for future requests
+                    localStorage.removeItem('cliPendingEmail'); // Clear pending email after successful verification
                     
                     // Clear URL
                     window.history.replaceState({}, document.title, '/cli.html');
