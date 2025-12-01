@@ -180,7 +180,7 @@ const authenticate = async (req, res, next) => {
       try {
         const kv = getStorage();
         if (kv) {
-          const sessionData = await kv.get(`cli:session:${token}`);
+          const sessionData = await storage.get(`cli:session:${token}`);
           if (sessionData) {
             // Handle both string and object responses from storage
             const session = typeof sessionData === 'string' ? JSON.parse(sessionData) : sessionData;
@@ -192,13 +192,13 @@ const authenticate = async (req, res, next) => {
             } else {
               // Check expiration
               if (Date.now() > session.expiresAt) {
-                await kv.del(`cli:session:${token}`);
+                await storage.del(`cli:session:${token}`);
                 return sendResponse(res, 401, 'failure', null, 'Session expired');
               }
               
               // Update last activity
               session.lastActivity = Date.now();
-              await kv.set(`cli:session:${token}`, JSON.stringify(session), { ex: 86400 });
+              await storage.set(`cli:session:${token}`, JSON.stringify(session), { ex: 86400 });
               
               req.authType = 'cli-session';
               req.userEmail = session.email;
@@ -1141,9 +1141,9 @@ app.get('/api/tld/:domain', authenticate, async (req, res) => {
 // MFA codes storage - using KV for serverless compatibility
 // Key format: mfa:code:{identifier} -> { code, expiresAt, verificationSid }
 async function storeMFACode(identifier, code, expiresAt, verificationSid = null) {
-  const kv = getKV();
-  console.log(`[storeMFACode] KV client available: ${!!kv}, identifier: ${identifier}`);
-  if (!kv) {
+    const storage = getStorage();
+  console.log(`[storeMFACode] Storage client available: ${!!storage}, identifier: ${identifier}`);
+  if (!storage) {
     console.error('[storeMFACode] KV not available, falling back to in-memory');
     console.error('[storeMFACode] KV env vars - URL: ' + (process.env.KV_REST_API_URL || process.env.mykeys_KV_REST_API_URL || 'not set'));
     console.error('[storeMFACode] KV env vars - TOKEN: ' + (process.env.KV_REST_API_TOKEN || process.env.mykeys_KV_REST_API_TOKEN ? 'set' : 'not set'));
@@ -1161,24 +1161,24 @@ async function storeMFACode(identifier, code, expiresAt, verificationSid = null)
     const value = JSON.stringify({ code: codeString, expiresAt, verificationSid });
     
     // Try Redis-compatible setex first (if available)
-    if (typeof kv.setex === 'function') {
-      await kv.setex(key, ttlSeconds, value);
+    if (typeof storage.setex === 'function') {
+      await storage.setex(key, ttlSeconds, value);
       console.log(`[storeMFACode] Stored code for ${identifier} using setex, expires in ${ttlSeconds}s`);
-    } else if (typeof kv.set === 'function') {
+    } else if (typeof storage.set === 'function') {
       // Try with expiration option
       try {
-        await kv.set(key, value, { ex: ttlSeconds });
+        await storage.set(key, value, { ex: ttlSeconds });
         console.log(`[storeMFACode] Stored code for ${identifier} with expiration, expires in ${ttlSeconds}s`);
       } catch (exError) {
         // If expiration option doesn't work, store without expiration and rely on expiresAt check
-        await kv.set(key, value);
+        await storage.set(key, value);
         console.log(`[storeMFACode] Stored code for ${identifier} without expiration (will check expiresAt)`);
       }
     } else {
-      throw new Error('KV client does not support set or setex');
+      throw new Error('Storage client does not support set or setex');
     }
   } catch (error) {
-    console.error(`[storeMFACode] Failed to store code in KV:`, error.message, error.stack);
+    console.error(`[storeMFACode] Failed to store code in storage:`, error.message, error.stack);
     // Fallback to in-memory
     if (!global.mfaCodes) global.mfaCodes = new Map();
     global.mfaCodes.set(identifier, { code, expiresAt, verificationSid });
@@ -1187,9 +1187,9 @@ async function storeMFACode(identifier, code, expiresAt, verificationSid = null)
 }
 
 async function getMFACode(identifier) {
-  const kv = getKV();
-  console.log(`[getMFACode] KV client available: ${!!kv}, identifier: ${identifier}`);
-  if (!kv) {
+    const storage = getStorage();
+  console.log(`[getMFACode] Storage client available: ${!!storage}, identifier: ${identifier}`);
+  if (!storage) {
     console.error('[getMFACode] KV not available, checking in-memory fallback');
     // Fallback to in-memory for local dev
     if (!global.mfaCodes) {
@@ -1204,7 +1204,7 @@ async function getMFACode(identifier) {
   try {
     const key = `mfa:code:${identifier}`;
     console.log(`[getMFACode] Looking up key: ${key}`);
-    const data = await kv.get(key);
+    const data = await storage.get(key);
     console.log(`[getMFACode] KV get result: ${data ? 'found' : 'not found'}`);
     if (!data || data === null) {
       console.log(`[getMFACode] No code found for identifier: ${identifier}, key: ${key}`);
@@ -1244,8 +1244,8 @@ async function getMFACode(identifier) {
 }
 
 async function deleteMFACode(identifier) {
-  const kv = getKV();
-  if (!kv) {
+    const storage = getStorage();
+  if (!storage) {
     // Fallback to in-memory for local dev
     if (!global.mfaCodes) return;
     global.mfaCodes.delete(identifier);
@@ -1254,10 +1254,10 @@ async function deleteMFACode(identifier) {
   
   try {
     const key = `mfa:code:${identifier}`;
-    await kv.del(key);
+    await storage.del(key);
     console.log(`[deleteMFACode] Deleted code for ${identifier}`);
   } catch (error) {
-    console.error(`[deleteMFACode] Error deleting code from KV:`, error.message);
+    console.error(`[deleteMFACode] Error deleting code from storage:`, error.message);
     // Fallback to in-memory
     if (!global.mfaCodes) return;
     global.mfaCodes.delete(identifier);
