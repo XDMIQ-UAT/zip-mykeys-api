@@ -2,17 +2,35 @@ const { test, expect } = require('@playwright/test');
 
 test.describe('Home Page - AI Agents Text Visibility', () => {
   test.beforeEach(async ({ page }) => {
-    await page.goto('/', { waitUntil: 'networkidle' });
-    // Wait for React to load
-    await page.waitForSelector('#root', { state: 'visible', timeout: 10000 });
-    // Wait for hero section to be present (with timeout)
-    try {
-      await page.waitForSelector('.hero', { state: 'visible', timeout: 10000 });
-    } catch (error) {
-      // If hero section doesn't exist, take screenshot for debugging
-      await page.screenshot({ path: 'test-results/home-page-debug.png', fullPage: true });
-      throw new Error(`Hero section not found. Page HTML: ${await page.content().substring(0, 500)}`);
+    // Navigate and wait for page to be ready
+    await page.goto('/', { waitUntil: 'domcontentloaded' });
+    
+    // Wait for React root to be visible
+    await page.waitForSelector('#root', { state: 'visible', timeout: 15000 });
+    
+    // Wait for React to hydrate and render content
+    // Check if hero section appears (with retries)
+    let heroFound = false;
+    for (let i = 0; i < 10; i++) {
+      try {
+        await page.waitForSelector('.hero', { state: 'visible', timeout: 2000 });
+        heroFound = true;
+        break;
+      } catch (e) {
+        // Wait a bit and retry
+        await page.waitForTimeout(500);
+      }
     }
+    
+    if (!heroFound) {
+      // Take screenshot for debugging
+      await page.screenshot({ path: 'test-results/home-page-debug.png', fullPage: true });
+      const bodyText = await page.locator('body').textContent();
+      throw new Error(`Hero section not found after 10 retries. Body text preview: ${bodyText?.substring(0, 200)}`);
+    }
+    
+    // Additional wait for any animations/transitions
+    await page.waitForTimeout(500);
   });
 
   test('should display "AI Agents" text in hero section', async ({ page }) => {
