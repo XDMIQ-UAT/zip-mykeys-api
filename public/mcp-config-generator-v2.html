@@ -1251,9 +1251,25 @@ ${fullConfigJson}`;
         }
         
         function copyConfig(event) {
-            // Copy just the server JSON (not the comments or full config)
+            // Copy just the clean server JSON (no comments)
             if (generatedConfig) {
-                navigator.clipboard.writeText(generatedConfig).then(() => {
+                // Extract just the JSON from the display if needed (fallback)
+                let jsonToCopy = generatedConfig;
+                
+                // If generatedConfig doesn't look like JSON, try to extract it
+                if (!generatedConfig.trim().startsWith('{')) {
+                    const outputElement = document.getElementById('configOutput');
+                    if (outputElement) {
+                        const text = outputElement.textContent;
+                        // Try to find JSON object in the text
+                        const jsonMatch = text.match(/\{[\s\S]*\}/);
+                        if (jsonMatch) {
+                            jsonToCopy = jsonMatch[0];
+                        }
+                    }
+                }
+                
+                navigator.clipboard.writeText(jsonToCopy).then(() => {
                     const btn = event ? event.target : document.querySelector('.copy-btn');
                     if (btn) {
                         const originalText = btn.textContent;
