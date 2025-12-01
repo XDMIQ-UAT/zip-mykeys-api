@@ -398,15 +398,53 @@
         
         .json-output {
             font-family: 'Courier New', monospace;
-            background: white;
+            background: #f5f5f5;
             padding: 15px;
             border-radius: 4px;
             border: 1px solid #ddd;
             overflow-x: auto;
-            font-size: 12px;
+            font-size: 13px;
             white-space: pre;
             max-height: 400px;
             overflow-y: auto;
+            position: relative;
+        }
+        
+        .json-output code {
+            display: block;
+            font-family: 'Courier New', 'Consolas', 'Monaco', monospace;
+            color: #333;
+            background: transparent;
+            padding: 0;
+            border: none;
+            font-size: 13px;
+            line-height: 1.5;
+        }
+        
+        .code-snippet {
+            background: #f8f9fa;
+            border: 1px solid #e1e4e8;
+            border-radius: 6px;
+            padding: 16px;
+            margin: 16px 0;
+            position: relative;
+        }
+        
+        .code-snippet pre {
+            margin: 0;
+            padding: 0;
+            background: transparent;
+            border: none;
+            overflow-x: auto;
+        }
+        
+        .code-snippet code {
+            font-family: 'Courier New', 'Consolas', 'Monaco', monospace;
+            font-size: 13px;
+            line-height: 1.6;
+            color: #24292e;
+            display: block;
+            white-space: pre;
         }
         
         .copy-btn {
@@ -702,7 +740,9 @@
             <div class="result-box" id="configResult" style="display: none;">
                 <h3>✅ Configuration Generated</h3>
                 <p><strong>Copy the JSON below</strong> and paste it into your app's "Add MCP Server" interface:</p>
-                <div class="json-output" id="configOutput"></div>
+                <div class="code-snippet">
+                    <pre><code id="configOutput"></code></pre>
+                </div>
                 <button class="copy-btn" onclick="copyConfig(event)">Copy Server JSON</button>
                 <p style="margin-top: 10px; font-size: 12px; color: #666;">
                     💡 The "Copy Server JSON" button copies just the server configuration (without comments) that you can paste directly into your app's MCP server interface.
