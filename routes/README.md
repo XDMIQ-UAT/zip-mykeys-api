@@ -2,11 +2,18 @@
 
 This directory contains modular route handlers for the MyKeys API. Routes are automatically loaded and registered when the server starts.
 
-## 🔒 Security: Routes are PRIVATE by Default
+## 🔒 Security & Privacy: Routes are PRIVATE and SECURED by Default
 
-**All routes require authentication by default.** The route loader automatically applies authentication middleware to all routes unless explicitly marked as public.
+**All routes require authentication by default** and include security and privacy middleware:
 
-To create a public route (no authentication), set `public: true` in your route module exports.
+- ✅ **Authentication Required** - All routes require authentication unless marked as public
+- ✅ **Security Headers** - Helmet.js security headers (CSP, HSTS, XSS protection)
+- ✅ **Privacy Headers** - No tracking, no caching of sensitive data
+- ✅ **Origin Validation** - Validates requests from trusted sources
+- ✅ **Request Sanitization** - Protects against prototype pollution
+- ✅ **Privacy-Aware Logging** - Logs without exposing sensitive data
+
+To create a public route (no authentication), set `public: true` in your route module exports. Security headers still apply.
 
 ## Creating a New Route Module
 

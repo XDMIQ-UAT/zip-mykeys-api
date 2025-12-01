@@ -3,10 +3,12 @@
  * 
  * Automatically loads and registers route modules from the routes directory
  * Routes are PRIVATE by default - require authentication unless marked as public
+ * All routes include security and privacy middleware
  */
 
 const fs = require('fs');
 const path = require('path');
+const { applySecurityMiddleware } = require('./security-middleware');
 
 /**
  * Load all route modules from a directory
@@ -49,12 +51,15 @@ function loadRoutes(app, routesDir = __dirname) {
       } else if (routeModule.router) {
         const mountPath = routeModule.path || '/';
         
+        // Apply security and privacy middleware to all routes
+        applySecurityMiddleware(routeModule.router);
+        
         // Apply authentication middleware unless route is marked as public
         if (!routeModule.public && authenticate) {
           app.use(mountPath, authenticate);
-          console.log(`[routes] ✓ Loaded route module: ${file} (mounted at ${mountPath}, PRIVATE)`);
+          console.log(`[routes] ✓ Loaded route module: ${file} (mounted at ${mountPath}, PRIVATE, SECURED)`);
         } else {
-          console.log(`[routes] ✓ Loaded route module: ${file} (mounted at ${mountPath}, PUBLIC)`);
+          console.log(`[routes] ✓ Loaded route module: ${file} (mounted at ${mountPath}, PUBLIC, SECURED)`);
         }
         
         app.use(mountPath, routeModule.router);
