@@ -4350,53 +4350,6 @@ app.get('/oauth2callback', (req, res) => {
   res.redirect('/role-management.html');
 });
 
-// Serve specific static HTML files FIRST (before all other routes to avoid conflicts)
-// These routes must be registered early to take precedence over express.static and React Router
-app.get('/tools', (req, res) => {
-  res.sendFile(path.join(__dirname, 'public', 'tools.html'), (err) => {
-    if (err) {
-      console.error('[server] Error serving /tools:', err);
-      res.status(404).send('Tools page not found');
-    }
-  });
-});
-
-app.get('/tools.html', (req, res) => {
-  res.sendFile(path.join(__dirname, 'public', 'tools.html'), (err) => {
-    if (err) {
-      console.error('[server] Error serving /tools.html:', err);
-      res.status(404).send('Tools page not found');
-    }
-  });
-});
-
-app.get('/cli.html', (req, res) => {
-  res.sendFile(path.join(__dirname, 'public', 'cli.html'), (err) => {
-    if (err) {
-      console.error('[server] Error serving /cli.html:', err);
-      res.status(404).send('CLI page not found');
-    }
-  });
-});
-
-app.get('/cli-overview.html', (req, res) => {
-  res.sendFile(path.join(__dirname, 'public', 'cli-overview.html'), (err) => {
-    if (err) {
-      console.error('[server] Error serving /cli-overview.html:', err);
-      res.status(404).send('CLI overview page not found');
-    }
-  });
-});
-
-app.get('/cli-desktop.html', (req, res) => {
-  res.sendFile(path.join(__dirname, 'public', 'cli-desktop.html'), (err) => {
-    if (err) {
-      console.error('[server] Error serving /cli-desktop.html:', err);
-      res.status(404).send('Desktop CLI page not found');
-    }
-  });
-});
-
 // Load modular routes from routes directory
 try {
   const { loadRoutes } = require('./routes');
