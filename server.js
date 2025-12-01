@@ -3970,9 +3970,14 @@ app.post('/api/cli/verify-magic-link', async (req, res) => {
     let ringId = null;
     try {
       ringId = await getRingForUser(linkData.email, true);
+      if (!ringId) {
+        ringId = 'default';
+      }
     } catch (ringError) {
       console.error('[cli] Error getting ring for user (non-fatal):', ringError);
+      console.error('[cli] Ring error stack:', ringError.stack);
       // Continue without ringId - session is still valid
+      ringId = 'default';
     }
     
     return sendResponse(res, 200, 'success', {

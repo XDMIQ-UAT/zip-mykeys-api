@@ -327,25 +327,28 @@ async function getRingForUser(email = null, createAnonymous = true) {
           [email]: ['admin'] // User is admin of their own ring
         });
         
-        // Register in registry (don't fail if already registered)
-        try {
-          await registerRing(userRingId, {
-            publicName: email.split('@')[0], // Use username part as public name
-            capabilities: ['key-management', 'token-management'],
-          });
-        } catch (regError) {
-          // Ignore if ring is already registered
-          if (!regError.message.includes('does not exist')) {
-            console.warn('[ring-registry] Warning registering ring (may already exist):', regError.message);
-          }
-        }
+        // Try to register in registry (non-blocking, don't fail if this errors)
+        // Registration is optional - the ring is already created and functional
+        registerRing(userRingId, {
+          publicName: email.split('@')[0], // Use username part as public name
+          capabilities: ['key-management', 'token-management'],
+        }).catch(regError => {
+          // Log but don't fail - ring is created, registration is optional
+          console.warn('[ring-registry] Could not register ring (non-fatal):', regError.message);
+        });
         
         return ring.id;
       } catch (error) {
         console.error('[ring-registry] Error creating ring for user:', error);
         // Fallback to anonymous ring if creation fails
-        const anonRing = await createAnonymousRing();
-        return anonRing.id;
+        try {
+          const anonRing = await createAnonymousRing();
+          return anonRing.id;
+        } catch (anonError) {
+          console.error('[ring-registry] Error creating anonymous ring:', anonError);
+          // Last resort: return a default ring ID
+          return 'default';
+        }
       }
     }
   }
