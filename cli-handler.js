@@ -339,6 +339,12 @@ function apiRequest(method, url, body, token) {
       });
       
       res.on('end', () => {
+        // Check if response is HTML (error page) instead of JSON
+        if (data.trim().startsWith('<!DOCTYPE') || data.trim().startsWith('<html')) {
+          reject(new Error(`Server returned HTML instead of JSON (HTTP ${res.statusCode}). The endpoint may not exist or there was a server error.`));
+          return;
+        }
+
         try {
           const parsed = JSON.parse(data);
           if (res.statusCode >= 200 && res.statusCode < 300) {
@@ -349,14 +355,25 @@ function apiRequest(method, url, body, token) {
             // Ensure details is always a string
             let details = '';
             if (parsed.details) {
-              details = typeof parsed.details === 'string' 
-                ? `: ${parsed.details}` 
-                : `: ${JSON.stringify(parsed.details)}`;
+              if (typeof parsed.details === 'string') {
+                details = `: ${parsed.details}`;
+              } else if (typeof parsed.details === 'object') {
+                // Try to extract meaningful info from error object
+                details = `: ${parsed.details.message || parsed.details.error || JSON.stringify(parsed.details)}`;
+              } else {
+                details = `: ${String(parsed.details)}`;
+              }
             }
             reject(new Error(`${errorMsg}${details}`));
           }
         } catch (e) {
-          reject(new Error(`Invalid JSON response: ${data.substring(0, 200)}`));
+          // Provide more helpful error message
+          const preview = data.substring(0, 200);
+          const isHtml = preview.includes('<html') || preview.includes('<!DOCTYPE');
+          const errorMsg = isHtml
+            ? `Server returned HTML error page (HTTP ${res.statusCode}). Check if the endpoint exists.`
+            : `Invalid JSON response (HTTP ${res.statusCode}): ${preview}`;
+          reject(new Error(errorMsg));
         }
       });
     });
