@@ -4276,6 +4276,16 @@ app.get('/oauth2callback', (req, res) => {
   res.redirect('/role-management.html');
 });
 
+// Load modular routes from routes directory
+try {
+  const { loadRoutes } = require('./routes');
+  loadRoutes(app);
+  console.log('[server] Modular routes loaded');
+} catch (error) {
+  console.warn('[server] Could not load modular routes:', error.message);
+  console.warn('[server] Continuing without modular routes...');
+}
+
 // Serve static files (including React Router app)
 app.use(express.static(path.join(__dirname, 'public'), {
   index: 'index.html',
