@@ -17,6 +17,7 @@ const helmet = require('helmet');
 const cors = require('cors');
 const morgan = require('morgan');
 const rateLimit = require('express-rate-limit');
+const { hashEmail, getStorageKey } = require('./email-hash');
 const { generateMCPToken, validateMCPToken, revokeMCPToken } = require('./token-auth');
 const { sendVerificationCode: sendSMSVerificationCode } = require('./sms-service');
 const { sendAuthCode: sendEmailAuthCode } = require('./email-service');
@@ -189,32 +190,76 @@ const authenticate = async (req, res, next) => {
             // Handle both string and object responses from storage
             const session = typeof sessionData === 'string' ? JSON.parse(sessionData) : sessionData;
             
-            // Validate session structure
-            if (!session.email || !session.expiresAt) {
-              console.error('[auth] Invalid CLI session data structure:', session);
-              // Continue to MCP token check
-            } else {
-              // Check expiration
-              if (Date.now() > session.expiresAt) {
-                await kv.del(`cli:session:${token}`);
-                return sendResponse(res, 401, 'failure', null, 'Session expired');
+            // Validate session structure (now uses emailHash instead of email)
+            if (!session.emailHash || !session.expiresAt) {
+              // Check for old format (backward compatibility - migrate)
+              if (session.email && session.expiresAt) {
+                // Migrate old session to hash-only format
+                const emailHash = hashEmail(session.email);
+                await kv.set(`cli:session:${token}`, JSON.stringify({
+                  emailHash: emailHash,
+                  createdAt: session.createdAt || Date.now(),
+                  expiresAt: session.expiresAt,
+                  lastActivity: Date.now()
+                }), { ex: 86400 });
+                session.emailHash = emailHash;
+              } else {
+                console.error('[auth] Invalid CLI session data structure:', session);
+                // Continue to MCP token check
+                return;
               }
-              
-              // Update last activity
-              session.lastActivity = Date.now();
-              await kv.set(`cli:session:${token}`, JSON.stringify(session), { ex: 86400 });
-              
-              req.authType = 'cli-session';
-              req.userEmail = session.email;
-              req.token = token; // Store token for CLI handler
-              try {
-                req.ringId = await getRingForUser(session.email, true);
-              } catch (ringError) {
-                console.error('[auth] Error getting ring for CLI user:', ringError);
-                req.ringId = 'default'; // Fallback to default ring
-              }
-              return next();
             }
+            
+            // Check expiration
+            if (Date.now() > session.expiresAt) {
+              await kv.del(`cli:session:${token}`);
+              return sendResponse(res, 401, 'failure', null, 'Session expired');
+            }
+            
+            // IMPORTANT: Email is NOT stored in session (privacy)
+            // User must provide email in request - we hash it and compare with session.emailHash
+            let userEmail = null;
+            
+            // Try to get email from request body, header, or query
+            if (req.body && req.body.email) {
+              userEmail = req.body.email.trim().toLowerCase();
+            } else if (req.headers['x-user-email']) {
+              userEmail = req.headers['x-user-email'].trim().toLowerCase();
+            } else if (req.query && req.query.email) {
+              userEmail = req.query.email.trim().toLowerCase();
+            }
+            
+            // Verify provided email matches session hash
+            if (userEmail) {
+              const providedEmailHash = hashEmail(userEmail);
+              if (providedEmailHash !== session.emailHash) {
+                return sendResponse(res, 401, 'failure', null, 'Email does not match session. Please provide the email address you used to sign up.');
+              }
+            } else {
+              // Email not provided - require it
+              return sendResponse(res, 401, 'failure', null, 'Email required. Cannot authenticate without your email address. Please provide the email you used to sign up.');
+            }
+            
+            // Update last activity
+            session.lastActivity = Date.now();
+            await kv.set(`cli:session:${token}`, JSON.stringify({
+              emailHash: session.emailHash,
+              createdAt: session.createdAt,
+              expiresAt: session.expiresAt,
+              lastActivity: Date.now()
+            }), { ex: 86400 });
+            
+            req.authType = 'cli-session';
+            req.userEmail = userEmail; // Keep email in memory for request (from user input)
+            req.userEmailHash = session.emailHash; // Provide hash for storage operations
+            req.token = token; // Store token for CLI handler
+            try {
+              req.ringId = await getRingForUser(userEmail, true);
+            } catch (ringError) {
+              console.error('[auth] Error getting ring for CLI user:', ringError);
+              req.ringId = 'default'; // Fallback to default ring
+            }
+            return next();
           }
         }
       } catch (err) {
@@ -231,6 +276,10 @@ const authenticate = async (req, res, next) => {
           req.clientId = validation.clientId;
           req.clientType = validation.clientType;
           req.userEmail = validation.email;
+          // Add email hash for storage operations (privacy)
+          if (validation.email) {
+            req.userEmailHash = hashEmail(validation.email);
+          }
           
           // Check if this is an AI agent - verify delegation
           const account = await getAccount(validation.email || token);
@@ -3923,12 +3972,18 @@ app.post('/api/cli/send-magic-link', async (req, res) => {
       return sendResponse(res, 500, 'failure', null, 'Storage unavailable');
     }
     
-    // Store magic link token
+    // Store magic link token with email hash (privacy - email not stored)
+    // User must provide email to verify - we hash it and compare
+    const emailHash = hashEmail(normalizedEmail);
     await storage.set(`cli:magic-link:${magicToken}`, JSON.stringify({
-      email: normalizedEmail,
+      emailHash: emailHash, // Store hash, not email (privacy)
       expiresAt,
       createdAt: Date.now()
     }), { ex: 900 }); // 15 minutes expiry
+    
+    // Also store temporary mapping: magic token -> email (only during link validity)
+    // This is needed for email sending - deleted after verification
+    await storage.set(`cli:magic-link-email:${magicToken}`, normalizedEmail, { ex: 900 });
     
     // Generate magic link URL
     const baseUrl = req.protocol + '://' + req.get('host');
@@ -4047,18 +4102,23 @@ This link will expire in 15 minutes. If you didn't request this link, you can sa
 // Verify magic link and create CLI session
 app.post('/api/cli/verify-magic-link', async (req, res) => {
   try {
-    const { token } = req.body;
+    const { token, email } = req.body;
     
     if (!token) {
       return sendResponse(res, 400, 'failure', null, 'Token is required');
     }
     
+    if (!email) {
+      return sendResponse(res, 400, 'failure', null, 'Email is required - cannot verify without your email address');
+    }
+    
+    const normalizedEmail = email.trim().toLowerCase();
     const storage = getStorage();
     if (!storage) {
       return sendResponse(res, 500, 'failure', null, 'Storage unavailable');
     }
     
-    // Get magic link data
+    // Get magic link data (contains emailHash)
     const magicLinkData = await storage.get(`cli:magic-link:${token}`);
     
     if (!magicLinkData) {
@@ -4076,28 +4136,38 @@ app.post('/api/cli/verify-magic-link', async (req, res) => {
     // Check expiration
     if (Date.now() > linkData.expiresAt) {
       await storage.del(`cli:magic-link:${token}`);
+      await storage.del(`cli:magic-link-email:${token}`);
       return sendResponse(res, 401, 'failure', null, 'Magic link has expired');
     }
     
-    // Delete magic link (one-time use)
+    // Verify provided email matches magic link hash
+    const providedEmailHash = hashEmail(normalizedEmail);
+    if (providedEmailHash !== linkData.emailHash) {
+      return sendResponse(res, 401, 'failure', null, 'Email does not match magic link');
+    }
+    
+    // Delete magic link (one-time use) and temporary email storage
     await storage.del(`cli:magic-link:${token}`);
+    await storage.del(`cli:magic-link-email:${token}`);
     
     // Generate CLI session token
     const sessionToken = crypto.randomBytes(32).toString('hex');
     const sessionExpiresAt = Date.now() + (24 * 60 * 60 * 1000); // 24 hours
     
-    // Store session
+    // Store session with email hash ONLY (privacy - email not stored in storage)
+    // User must provide email in each request - we hash it and compare with stored hash
     await storage.set(`cli:session:${sessionToken}`, JSON.stringify({
-      email: linkData.email,
+      emailHash: providedEmailHash, // Store hash, not email (privacy)
       createdAt: Date.now(),
       expiresAt: sessionExpiresAt,
       lastActivity: Date.now()
     }), { ex: 86400 }); // 24 hours
     
     // Get user's ring for isolation (don't fail if this errors)
+    // Use provided email (not stored email) for ring lookup
     let ringId = null;
     try {
-      ringId = await getRingForUser(linkData.email, true);
+      ringId = await getRingForUser(normalizedEmail, true);
       if (!ringId) {
         ringId = 'default';
       }
@@ -4108,10 +4178,13 @@ app.post('/api/cli/verify-magic-link', async (req, res) => {
       ringId = 'default';
     }
     
+    // Return session token - email is NOT returned (privacy)
+    // User must provide email in each request
     return sendResponse(res, 200, 'success', {
       sessionToken,
-      email: linkData.email,
-      ringId: ringId || 'default'
+      // Email NOT returned - user must provide it in each request
+      ringId: ringId || 'default',
+      message: 'Session created. You must provide your email address in each request.'
     });
   } catch (error) {
     console.error('[cli] Error verifying magic link:', error);

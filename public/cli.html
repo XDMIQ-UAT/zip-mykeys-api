@@ -612,13 +612,19 @@
                 );
                 
                 // Race between fetch and timeout
+                // Include email in request for privacy (email hash verification)
+                // Email is required - we hash it and compare with session hash
                 const fetchPromise = fetch(`${API_BASE}/api/cli/execute`, {
                     method: 'POST',
                     headers: {
                         'Authorization': `Bearer ${sessionToken}`,
-                        'Content-Type': 'application/json'
+                        'Content-Type': 'application/json',
+                        'X-User-Email': userEmail || '' // Include email for hash verification
                     },
-                    body: JSON.stringify({ command })
+                    body: JSON.stringify({ 
+                        command,
+                        email: userEmail // Also include in body for hash verification
+                    })
                 });
                 
                 const response = await Promise.race([fetchPromise, timeoutPromise]);
