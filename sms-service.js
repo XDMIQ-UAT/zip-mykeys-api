@@ -8,31 +8,8 @@
 const axios = require('axios');
 const { kv } = require('@vercel/kv');
 
-// Create KV client with fallback to mykeys_ prefixed variables
-let kvClient = null;
-function getKV() {
-  if (!kvClient) {
-    const { createClient } = require('@vercel/kv');
-    const kvUrl = process.env.KV_REST_API_URL || process.env.mykeys_KV_REST_API_URL || process.env.UPSTASH_REDIS_REST_URL;
-    const kvToken = process.env.KV_REST_API_TOKEN || process.env.mykeys_KV_REST_API_TOKEN || process.env.UPSTASH_REDIS_REST_TOKEN;
-    
-    if (kvUrl && kvToken) {
-      kvClient = createClient({
-        url: kvUrl,
-        token: kvToken,
-      });
-    } else {
-      try {
-        // @vercel/kv exports kv as a property, not a named export
-        const kvModule = require('@vercel/kv');
-        kvClient = kvModule.kv;
-      } catch (e) {
-        console.error('[sms-service] KV client not available');
-      }
-    }
-  }
-  return kvClient;
-}
+// Use shared storage utility
+const { getStorage } = require('./kv-utils');
 
 // Lazy initialization of Twilio credentials
 let twilioCredentials = null;
@@ -41,14 +18,14 @@ async function getTwilioCredentials() {
   if (twilioCredentials) return twilioCredentials;
   
   try {
-    const kv = getKV();
+    const kv = getStorage();
     if (!kv) {
-      throw new Error('KV client not initialized');
+      throw new Error('Storage service not available');
     }
     
     const twilioCredsStr = await kv.get('secret:twilio-credentials');
     if (!twilioCredsStr) {
-      throw new Error('Twilio credentials not found in KV. Store them first.');
+      throw new Error('Twilio credentials not found. Store them first.');
     }
     
     twilioCredentials = typeof twilioCredsStr === 'string' ? JSON.parse(twilioCredsStr) : twilioCredsStr;

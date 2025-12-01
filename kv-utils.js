@@ -1,14 +1,14 @@
 /**
- * KV Storage Utilities
+ * Storage Utilities
  * 
- * Shared module for KV storage access to avoid circular dependencies
+ * Shared module for storage access to avoid circular dependencies
  */
 
 const { createClient } = require('@vercel/kv');
 
 let kv = null;
 
-function getKV() {
+function getStorage() {
   if (!kv) {
     const kvUrl = process.env.KV_REST_API_URL || process.env.mykeys_KV_REST_API_URL || process.env.UPSTASH_REDIS_REST_URL;
     const kvToken = process.env.KV_REST_API_TOKEN || process.env.mykeys_KV_REST_API_TOKEN || process.env.UPSTASH_REDIS_REST_TOKEN;
@@ -26,15 +26,16 @@ function getKV() {
         // kv is a property of the module, access it as kvModule.kv
         kv = kvModule.kv;
       } catch (e) {
-        console.error('[kv-utils] KV client not available - missing environment variables');
+        console.error('[storage] Storage client not available - missing environment variables');
       }
     }
   }
   return kv;
 }
 
-module.exports = { getKV };
+// Export both names for backward compatibility during migration
+module.exports = { getStorage, getKV: getStorage };
 
 // Debug: Verify module is loading
-console.log('[kv-utils] Module loaded, getKV exported:', typeof getKV === 'function');
+console.log('[storage] Module loaded, getStorage exported:', typeof getStorage === 'function');
 

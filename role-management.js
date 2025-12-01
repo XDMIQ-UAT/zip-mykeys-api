@@ -6,7 +6,7 @@
  * Ring-scoped roles with HIPAA-compliant separation
  */
 
-const { getKV } = require('./kv-utils');
+const { getStorage } = require('./kv-utils');
 const { 
   getRingForEmail, 
   getRingMemberRoles, 
@@ -43,7 +43,7 @@ async function getUserRoles(identifier, ringId = null) {
     }
     
     // Fallback to legacy global roles
-    const kv = getKV();
+    const kv = getStorage();
     if (!kv) {
       return identifier === FIRST_EMAIL ? 'admin' : DEFAULT_ROLE;
     }
@@ -121,7 +121,7 @@ async function setUserRoles(identifier, role, ringId = null) {
     }
     
     // Fallback to legacy global roles
-    const kv = getKV();
+    const kv = getStorage();
     if (!kv) {
       throw new Error('KV storage not available');
     }
@@ -160,7 +160,7 @@ async function getAllUserRoles(ringId = null) {
     }
     
     // Fallback to legacy global roles
-    const kv = getKV();
+    const kv = getStorage();
     if (!kv) {
       // Fallback: return first email
       return {

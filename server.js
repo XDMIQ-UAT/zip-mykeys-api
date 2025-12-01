@@ -3,8 +3,8 @@ const express = require('express');
 // Support both standard KV vars and mykeys_ prefixed vars
 const { createClient } = require('@vercel/kv');
 
-// Import getKV from shared module to avoid circular dependencies
-const { getKV } = require('./kv-utils');
+// Import getStorage from shared module to avoid circular dependencies
+const { getStorage } = require('./kv-utils');
 
 // Load environment variables FIRST (before any modules that need them)
 // Priority: .env.local (local dev) > .env (shared defaults)
@@ -178,7 +178,7 @@ const authenticate = async (req, res, next) => {
 
       // Try CLI session token first
       try {
-        const kv = getKV();
+        const kv = getStorage();
         if (kv) {
           const sessionData = await kv.get(`cli:session:${token}`);
           if (sessionData) {
@@ -342,7 +342,7 @@ function decrypt(encrypted, iv, authTag) {
 // Helper function to get secret from GCP Secret Manager
 // Helper function to get secret from Redis/KV (ring-scoped)
 async function getSecretFromRedis(secretName, ringId = null) {
-  const kvClient = getKV();
+  const kvClient = getStorage();
   if (!kvClient) return null;
   
   try {
@@ -362,7 +362,7 @@ async function getSecretFromRedis(secretName, ringId = null) {
 
 // Helper function to store secret in Redis (ring-scoped)
 async function storeSecretInRedis(secretName, secretValue, labels = {}, ringId = null) {
-  const kvClient = getKV();
+  const kvClient = getStorage();
   if (!kvClient) throw new Error('KV client not initialized');
   
   try {
@@ -620,9 +620,9 @@ app.get('/api/v1/health', (req, res) => {
 // List all secrets
 app.get('/api/secrets', authenticate, async (req, res) => {
   try {
-    const kvClient = getKV();
+    const kvClient = getStorage();
     if (!kvClient) {
-      return res.status(500).json({ error: 'KV client not initialized' });
+      return res.status(500).json({ error: 'Storage unavailable', message: 'Storage service is not available. Please try again later.' });
     }
     
     // List secrets from Redis/KV
@@ -663,9 +663,9 @@ app.get('/api/debug/redis-status', async (req, res) => {
     let kvError = null;
     
     try {
-      const kvClient = getKV();
+      const kvClient = getStorage();
       if (!kvClient) {
-        throw new Error('KV client not initialized');
+        throw new Error('Storage service not available');
       }
       
       // Try a simple get to test connection
@@ -771,7 +771,7 @@ app.put('/api/secrets/:name', authenticate, async (req, res) => {
 app.delete('/api/secrets/:name', authenticate, async (req, res) => {
   try {
     // GCP removed - delete from Redis only
-    const kvClient = getKV();
+    const kvClient = getStorage();
     if (kvClient) {
       await kvClient.del(`secret:${req.params.name}`);
       await kvClient.del(`secret:${req.params.name}:meta`);
@@ -968,6 +968,7 @@ app.post('/api/v1/secrets/:ecosystem', authenticate, async (req, res) => {
     console.error(`Error storing secret ${req.params.ecosystem}:`, error.message);
     res.status(500).json({ 
       error: 'Failed to store secret',
+      message: 'Unable to save secret. Please try again or contact support if the issue persists.',
       details: error.message 
     });
   }

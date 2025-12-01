@@ -8,7 +8,7 @@
  * - 3 people where each has one role individually
  */
 
-const { getKV } = require('./kv-utils');
+const { getStorage } = require('./kv-utils');
 
 const RINGS_KEY = 'rings';
 const FIRST_EMAIL = 'bcherrman@gmail.com'; // Always known first email
@@ -122,7 +122,7 @@ async function getRingForEmail(email) {
   email = email.trim().toLowerCase();
   
   try {
-    const kv = getKV();
+    const kv = getStorage();
     if (!kv) return null;
     
     const ringsData = await kv.get(RINGS_KEY);
@@ -165,9 +165,9 @@ async function createRing(ringId = null, firstIdentifier = FIRST_EMAIL, initialM
   const creatorIdentifier = (createdBy || firstIdentifier).trim().toLowerCase();
   
   try {
-    const kv = getKV();
+    const kv = getStorage();
     if (!kv) {
-      throw new Error('KV storage not available');
+      throw new Error('Storage service not available');
     }
     
     // Generate ring ID if not provided (token-based identifier)
@@ -259,7 +259,7 @@ async function createRing(ringId = null, firstIdentifier = FIRST_EMAIL, initialM
  */
 async function logAuditEvent(eventType, eventData) {
   try {
-    const kv = getKV();
+    const kv = getStorage();
     if (!kv) return;
     
     const auditKey = `audit:${Date.now()}-${Math.random().toString(36).substring(7)}`;
@@ -298,7 +298,7 @@ async function getRing(ringId) {
   if (!ringId) return null;
   
   try {
-    const kv = getKV();
+    const kv = getStorage();
     if (!kv) return null;
     
     const ringsData = await kv.get(RINGS_KEY);
@@ -319,7 +319,7 @@ async function getRing(ringId) {
  */
 async function getAllRings() {
   try {
-    const kv = getKV();
+    const kv = getStorage();
     if (!kv) return {};
     
     const ringsData = await kv.get(RINGS_KEY);
@@ -346,9 +346,9 @@ async function updateRingRoles(ringId, roles) {
   }
   
   try {
-    const kv = getKV();
+    const kv = getStorage();
     if (!kv) {
-      throw new Error('KV storage not available');
+      throw new Error('Storage service not available');
     }
     
     const ringsData = await kv.get(RINGS_KEY);
@@ -421,9 +421,9 @@ async function addRingMember(ringId, identifier, memberData = 'member', addedBy 
   const normalizedMember = normalizeMember(memberData);
   
   try {
-    const kv = getKV();
+    const kv = getStorage();
     if (!kv) {
-      throw new Error('KV storage not available');
+      throw new Error('Storage service not available');
     }
     
     const ringsData = await kv.get(RINGS_KEY);
@@ -502,9 +502,9 @@ async function removeRingMember(ringId, email) {
   email = email.trim().toLowerCase();
   
   try {
-    const kv = getKV();
+    const kv = getStorage();
     if (!kv) {
-      throw new Error('KV storage not available');
+      throw new Error('Storage service not available');
     }
     
     const ringsData = await kv.get(RINGS_KEY);
@@ -587,9 +587,9 @@ async function getRingMemberRoles(ringId, identifier) {
  */
 async function initializeDefaultRing() {
   try {
-    const kv = getKV();
+    const kv = getStorage();
     if (!kv) {
-      throw new Error('KV storage not available');
+      throw new Error('Storage service not available');
     }
     
     const ringsData = await kv.get(RINGS_KEY);

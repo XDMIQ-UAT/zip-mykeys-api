@@ -6,7 +6,7 @@
  * Works for both AI agents and humans
  */
 
-const { getKV } = require('./kv-utils');
+const { getStorage } = require('./kv-utils');
 
 const PERSONAS = {
   ANONYMOUS: 'anonymous',
@@ -62,7 +62,7 @@ async function getPersona(identifier) {
   identifier = identifier.trim().toLowerCase();
   
   try {
-    const kv = getKV();
+    const kv = getStorage();
     if (!kv) {
       return PERSONAS.ANONYMOUS;
     }
@@ -165,9 +165,9 @@ async function upgradePersona(identifier, targetPersona, data = {}) {
   }
   
   try {
-    const kv = getKV();
+    const kv = getStorage();
     if (!kv) {
-      throw new Error('KV storage not available');
+      throw new Error('Storage service not available');
     }
     
     const accountKey = `persona:${identifier}`;
@@ -274,9 +274,9 @@ async function createAccount(identifier, data = {}) {
   }
   
   try {
-    const kv = getKV();
+    const kv = getStorage();
     if (!kv) {
-      throw new Error('KV storage not available');
+      throw new Error('Storage service not available');
     }
     
     const accountKey = `persona:${identifier}`;
@@ -324,7 +324,7 @@ async function getAccount(identifier) {
   identifier = identifier.trim().toLowerCase();
   
   try {
-    const kv = getKV();
+    const kv = getStorage();
     if (!kv) return null;
     
     const accountKey = `persona:${identifier}`;
@@ -346,7 +346,7 @@ async function getAccount(identifier) {
  */
 async function trackAgentDelegation(humanIdentifier, agentIdentifier) {
   try {
-    const kv = getKV();
+    const kv = getStorage();
     if (!kv) return;
     
     const humanAccount = await getAccount(humanIdentifier);
@@ -387,9 +387,9 @@ async function verifyHumanAccount(identifier, verificationMethod, verificationId
   }
   
   try {
-    const kv = getKV();
+    const kv = getStorage();
     if (!kv) {
-      throw new Error('KV storage not available');
+      throw new Error('Storage service not available');
     }
     
     const account = await getAccount(identifier);

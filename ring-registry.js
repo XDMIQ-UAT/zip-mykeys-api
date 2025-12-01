@@ -11,7 +11,7 @@
  * - Enables mesh connections for key/token/password management
  */
 
-const { getKV } = require('./kv-utils');
+const { getStorage } = require('./kv-utils');
 const { getRingForEmail, getRing } = require('./ring-management');
 
 const REGISTRY_KEY = 'ring-registry';
@@ -98,9 +98,9 @@ async function registerRing(ringId, metadata = {}) {
   }
   
   try {
-    const kv = getKV();
+    const kv = getStorage();
     if (!kv) {
-      throw new Error('KV storage not available');
+      throw new Error('Storage service not available');
     }
     
     // Get ring to ensure it exists
@@ -139,7 +139,7 @@ async function registerRing(ringId, metadata = {}) {
  */
 async function discoverRings(includeAnonymous = true) {
   try {
-    const kv = getKV();
+    const kv = getStorage();
     if (!kv) return {};
     
     const registryData = await kv.get(REGISTRY_KEY);
@@ -174,7 +174,7 @@ async function getRingMetadata(ringId) {
   if (!ringId) return null;
   
   try {
-    const kv = getKV();
+    const kv = getStorage();
     if (!kv) return null;
     
     const registryData = await kv.get(REGISTRY_KEY);
@@ -200,9 +200,9 @@ async function updateRingMetadata(ringId, updates) {
   }
   
   try {
-    const kv = getKV();
+    const kv = getStorage();
     if (!kv) {
-      throw new Error('KV storage not available');
+      throw new Error('Storage service not available');
     }
     
     const registryData = await kv.get(REGISTRY_KEY);
@@ -248,9 +248,9 @@ async function unregisterRing(ringId) {
   }
   
   try {
-    const kv = getKV();
+    const kv = getStorage();
     if (!kv) {
-      throw new Error('KV storage not available');
+      throw new Error('Storage service not available');
     }
     
     const registryData = await kv.get(REGISTRY_KEY);
@@ -449,7 +449,7 @@ async function trackKeyAddition(ringId, keyName, secretValue, labels = {}) {
   if (!ringId || !keyName) return null;
   
   try {
-    const kv = getKV();
+    const kv = getStorage();
     if (!kv) return null;
     
     // Get current metadata
@@ -654,7 +654,7 @@ async function trackKeyAddition(ringId, keyName, secretValue, labels = {}) {
  */
 async function calculateViralExpansion(ringId, analytics) {
   try {
-    const kv = getKV();
+    const kv = getStorage();
     if (!kv) return;
     
     // Get ring to check member count

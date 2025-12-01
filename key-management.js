@@ -8,7 +8,7 @@
  * - Content is isolated between rings (no cross-ring access)
  */
 
-const { getKV } = require('./kv-utils');
+const { getStorage } = require('./kv-utils');
 const { getRing, getRingForEmail } = require('./ring-management');
 const { getSecret, storeSecret } = require('./server');
 
@@ -43,7 +43,7 @@ async function listRingKeys(ringId) {
   if (!ringId) return [];
   
   try {
-    const kv = getKV();
+    const kv = getStorage();
     if (!kv) return [];
     
     // Get all secrets for this ring
@@ -86,7 +86,7 @@ async function registerRingKey(ringId, keyName, secretValue = null, labels = {},
   if (!ringId || !keyName) return false;
   
   try {
-    const kv = getKV();
+    const kv = getStorage();
     if (!kv) return false;
     
     const metadataKey = `ring:${ringId}:keys:list`;
@@ -303,7 +303,7 @@ async function getKeySharingInfo(ringId, keyName) {
     const ring = await getRing(ringId);
     if (!ring) return null;
     
-    const kv = getKV();
+    const kv = getStorage();
     if (kv) {
       // Check visibility settings
       const visibilityKey = `ring:${ringId}:key:${keyName}:visibility`;
@@ -361,7 +361,7 @@ async function canUserViewKey(identifier, ringId, keyName) {
       return false;
     }
     
-    const kv = getKV();
+    const kv = getStorage();
     if (!kv) return true; // Fallback to allowing access if KV unavailable
     
     // Check visibility settings
@@ -437,7 +437,7 @@ async function requestKeyAccess(ringId, keyName, requestedBy, reason = '') {
     }
     
     // Create access request
-    const kv = getKV();
+    const kv = getStorage();
     if (kv) {
       const requestKey = `ring:${ringId}:key:${keyName}:request:${requestedBy}`;
       await kv.set(requestKey, JSON.stringify({
@@ -513,7 +513,7 @@ async function grantKeyAccess(ringId, keyName, grantedBy) {
     }
     
     // Make key shared (visible to all members)
-    const kv = getKV();
+    const kv = getStorage();
     if (kv) {
       const visibilityKey = `ring:${ringId}:key:${keyName}:visibility`;
       await kv.set(visibilityKey, JSON.stringify({

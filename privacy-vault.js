@@ -8,7 +8,7 @@
  */
 
 const crypto = require('crypto');
-const { getKV } = require('./kv-utils');
+const { getStorage } = require('./kv-utils');
 const { getRing } = require('./ring-management');
 
 const ALGORITHM = 'aes-256-gcm';
@@ -87,9 +87,9 @@ async function storeVaultSecret(ringId, keyName, userId, vaultSecretName, vaultS
   }
   
   try {
-    const kv = getKV();
+    const kv = getStorage();
     if (!kv) {
-      throw new Error('KV storage not available');
+      throw new Error('Storage service not available');
     }
     
     // Verify key exists in ring
@@ -155,9 +155,9 @@ async function getVaultSecret(ringId, keyName, userId, vaultSecretName, masterKe
   }
   
   try {
-    const kv = getKV();
+    const kv = getStorage();
     if (!kv) {
-      throw new Error('KV storage not available');
+      throw new Error('Storage service not available');
     }
     
     const vaultKey = `${VAULT_PREFIX}ring:${ringId}:key:${keyName}:user:${userId}:secret:${vaultSecretName}`;
@@ -195,7 +195,7 @@ async function listVaultSecrets(ringId, keyName, userId) {
   }
   
   try {
-    const kv = getKV();
+    const kv = getStorage();
     if (!kv) {
       return [];
     }
@@ -224,9 +224,9 @@ async function deleteVaultSecret(ringId, keyName, userId, vaultSecretName) {
   }
   
   try {
-    const kv = getKV();
+    const kv = getStorage();
     if (!kv) {
-      throw new Error('KV storage not available');
+      throw new Error('Storage service not available');
     }
     
     const vaultKey = `${VAULT_PREFIX}ring:${ringId}:key:${keyName}:user:${userId}:secret:${vaultSecretName}`;
@@ -275,7 +275,7 @@ async function getVaultMetadata(ringId, keyName, userId) {
   try {
     const secrets = await listVaultSecrets(ringId, keyName, userId);
     
-    const kv = getKV();
+    const kv = getStorage();
     const metadata = {
       ringId,
       keyName,
