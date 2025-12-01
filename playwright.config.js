@@ -8,6 +8,11 @@ const { defineConfig, devices } = require('@playwright/test');
 module.exports = defineConfig({
   testDir: './tests/e2e',
   
+  /* Skip debug tests in CI (they're for local development only) */
+  testMatch: process.env.CI 
+    ? ['**/*.spec.js', '!**/debug-*.spec.js']
+    : ['**/*.spec.js'],
+  
   /* Run tests in files in parallel */
   fullyParallel: true,
   
