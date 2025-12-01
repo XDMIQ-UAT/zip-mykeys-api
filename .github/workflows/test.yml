@@ -15,6 +15,7 @@ jobs:
   unit-tests:
     name: Unit Tests
     runs-on: ubuntu-latest
+    timeout-minutes: 10  # Prevent infinite hangs
     
     steps:
       - name: Checkout code
@@ -49,6 +50,7 @@ jobs:
   e2e-tests:
     name: E2E Tests
     runs-on: ubuntu-latest
+    timeout-minutes: 15  # Prevent infinite hangs
     
     # Only run E2E tests on PRs and main/master branch pushes (skip on feature branch pushes)
     # This reduces CI time while ensuring PRs and main branch are fully tested
@@ -87,6 +89,15 @@ jobs:
           # Add minimal test env vars (tests should mock external services)
           KV_REST_API_URL: ${{ secrets.KV_REST_API_URL || 'http://localhost:6379' }}
           KV_REST_API_TOKEN: ${{ secrets.KV_REST_API_TOKEN || 'test-token' }}
+        timeout-minutes: 12  # Timeout for this step specifically
+      
+      # Ensure server process is killed if tests hang
+      - name: Cleanup (if tests fail)
+        if: failure()
+        run: |
+          echo "Tests failed or timed out - cleaning up any hanging processes"
+          pkill -f "node server.js" || true
+          pkill -f "playwright" || true
       
       - name: Upload test results
         if: always()
@@ -111,6 +122,7 @@ jobs:
     runs-on: ubuntu-latest
     needs: [unit-tests, e2e-tests]
     if: always()
+    timeout-minutes: 2  # Prevent infinite hangs
     
     # This job creates a status check that Vercel can wait for
     # Status check name: "Tests / test-summary"
@@ -121,18 +133,20 @@ jobs:
           echo "Unit tests: ${{ needs.unit-tests.result }}"
           echo "E2E tests: ${{ needs.e2e-tests.result }}"
           
+          # Handle case where e2e-tests job was skipped (not in needs results)
           if [ "${{ needs.unit-tests.result }}" != "success" ]; then
             echo "❌ Unit tests failed"
             exit 1
           fi
           
           # E2E tests might be skipped on feature branches, which is OK
+          # Check if e2e-tests result exists and is not skipped
           if [ "${{ needs.e2e-tests.result }}" == "failure" ]; then
             echo "❌ E2E tests failed"
             exit 1
           fi
           
-          if [ "${{ needs.e2e-tests.result }}" == "skipped" ]; then
+          if [ "${{ needs.e2e-tests.result }}" == "skipped" ] || [ -z "${{ needs.e2e-tests.result }}" ]; then
             echo "⚠️ E2E tests skipped (expected on feature branches)"
           fi
           
