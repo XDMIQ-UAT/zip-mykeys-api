@@ -1265,16 +1265,23 @@ ${fullConfigJson}`;
             // Store clean JSON (no comments) for copying
             generatedConfig = serverJson;
             
-            // Display JSON in code block (just the JSON, no comments)
+            // Get result box and code element
+            const resultBox = document.getElementById('configResult');
             const codeElement = document.getElementById('configOutput');
-            if (codeElement) {
-                codeElement.textContent = serverJson;
+            
+            if (!resultBox || !codeElement) {
+                console.error('Result box or code element not found!', { resultBox, codeElement });
+                alert('Error: Could not find output elements. Please refresh the page.');
+                return false;
             }
+            
+            // Display JSON in code block (just the JSON, no comments)
+            codeElement.textContent = serverJson;
+            console.log('JSON generated and set:', serverJson.substring(0, 100) + '...');
             
             // Show download instructions above the code block if using hosted
             if (serverSource === 'hosted') {
-                const codeSnippet = document.querySelector('#configResult .code-snippet');
-                const resultBox = document.getElementById('configResult');
+                const codeSnippet = resultBox.querySelector('.code-snippet');
                 
                 // Remove existing download instructions if any
                 const existingInstructions = resultBox.querySelector('.download-instructions');
@@ -1309,7 +1316,15 @@ curl -o ~/.mykeys/mcp-server.js https://mykeys.zip/mcp-server.js`;
                 }
             }
             
-            document.getElementById('configResult').classList.add('show');
+            // Show the result box
+            resultBox.style.display = 'block';
+            resultBox.classList.add('show');
+            
+            // Scroll to result
+            setTimeout(() => {
+                resultBox.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+            }, 100);
+            
             return true;
         }
         
