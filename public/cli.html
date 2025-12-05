@@ -405,6 +405,10 @@
         }
         
         function checkSession() {
+            // Always get fresh values from localStorage
+            sessionToken = localStorage.getItem('cliSessionToken');
+            userEmail = localStorage.getItem('cliUserEmail');
+            
             if (sessionToken && userEmail) {
                 // Verify session is still valid
                 verifySession().then(valid => {
@@ -419,15 +423,21 @@
         
         async function verifySession() {
             try {
+                // Always get fresh email from localStorage
+                const currentEmail = localStorage.getItem('cliUserEmail') || userEmail || '';
+                if (!currentEmail) {
+                    return false;
+                }
+                
                 // Include email for hash verification (privacy - email not stored server-side)
                 const response = await fetch(`${API_BASE}/api/cli/verify-session`, {
                     method: 'POST',
                     headers: {
                         'Authorization': `Bearer ${sessionToken}`,
                         'Content-Type': 'application/json',
-                        'X-User-Email': userEmail || ''
+                        'X-User-Email': currentEmail
                     },
-                    body: JSON.stringify({ email: userEmail })
+                    body: JSON.stringify({ email: currentEmail })
                 });
                 return response.ok;
             } catch (error) {
@@ -520,7 +530,9 @@
         function updatePrompt() {
             const promptText = document.getElementById('promptText');
             const platform = userPreferences.platform || 'linux';
-            const username = userEmail ? userEmail.split('@')[0] : 'user';
+            // Always get fresh email from localStorage
+            const currentEmail = localStorage.getItem('cliUserEmail') || userEmail || '';
+            const username = currentEmail ? currentEmail.split('@')[0] : 'user';
             
             if (platform === 'mac') {
                 promptText.textContent = `${username}@mykeys %`;
@@ -635,16 +647,24 @@
                 // Race between fetch and timeout
                 // Include email in request for privacy (email hash verification)
                 // Email is required - we hash it and compare with session hash
+                // Always get fresh email from localStorage to ensure it's available
+                const currentEmail = localStorage.getItem('cliUserEmail') || userEmail || '';
+                
+                if (!currentEmail) {
+                    addOutput(output, 'Error: Email not found. Please log in again.', 'error');
+                    return;
+                }
+                
                 const fetchPromise = fetch(`${API_BASE}/api/cli/execute`, {
                     method: 'POST',
                     headers: {
                         'Authorization': `Bearer ${sessionToken}`,
                         'Content-Type': 'application/json',
-                        'X-User-Email': userEmail || '' // Include email for hash verification
+                        'X-User-Email': currentEmail // Include email for hash verification
                     },
                     body: JSON.stringify({ 
                         command,
-                        email: userEmail // Also include in body for hash verification
+                        email: currentEmail // Also include in body for hash verification
                     })
                 });
                 
