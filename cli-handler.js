@@ -9,6 +9,15 @@ const http = require('http');
 const MYKEYS_URL = process.env.MYKEYS_URL || 'https://mykeys.zip';
 
 /**
+ * Detect if we're running in local development
+ * Returns true only if explicitly in local dev (not on Vercel)
+ */
+function isLocalDevelopment() {
+  const isVercel = process.env.VERCEL || process.env.VERCEL_URL;
+  return process.env.NODE_ENV === 'development' && !isVercel;
+}
+
+/**
  * Execute a CLI command
  * @param {string} command - Command name (list, get, set, delete, admin, etc.)
  * @param {Array<string>} args - Command arguments
@@ -110,13 +119,6 @@ Ring: ${ringId || 'default'}
  */
 async function handleListSecrets(token, ecosystem = null) {
   try {
-    // In local development, use relative URL to connect to same server
-    // Otherwise use full URL from MYKEYS_URL
-    const isLocalDev = process.env.NODE_ENV === 'development' || 
-                       !process.env.MYKEYS_URL || 
-                       process.env.MYKEYS_URL.includes('localhost') ||
-                       process.env.MYKEYS_URL.includes('127.0.0.1');
-    
     // If no ecosystem specified, show message asking for one
     if (!ecosystem) {
       return { 
@@ -125,10 +127,11 @@ async function handleListSecrets(token, ecosystem = null) {
     }
     
     // Use relative URL in local dev (connects to same server)
-    // Use full URL in production
+    // Use full URL in production (apiRequest will handle the conversion)
+    const isLocalDev = isLocalDevelopment();
     const url = isLocalDev 
       ? `/api/v1/secrets/${ecosystem}`
-      : `${MYKEYS_URL || ''}/api/v1/secrets/${ecosystem}`;
+      : `${MYKEYS_URL}/api/v1/secrets/${ecosystem}`;
     
     const data = await apiRequest('GET', url, null, token);
     
@@ -221,14 +224,10 @@ async function handleDeleteSecret(token, ecosystem, secretName) {
   }
   
   try {
-    const isLocalDev = process.env.NODE_ENV === 'development' || 
-                       !process.env.MYKEYS_URL || 
-                       process.env.MYKEYS_URL.includes('localhost') ||
-                       process.env.MYKEYS_URL.includes('127.0.0.1');
-    
+    const isLocalDev = isLocalDevelopment();
     const url = isLocalDev 
       ? `/api/v1/secrets/${ecosystem}/${secretName}`
-      : `${MYKEYS_URL || ''}/api/v1/secrets/${ecosystem}/${secretName}`;
+      : `${MYKEYS_URL}/api/v1/secrets/${ecosystem}/${secretName}`;
     await apiRequest('DELETE', url, null, token);
     
     return { output: `Secret '${secretName}' deleted successfully from ecosystem '${ecosystem}'.` };
@@ -242,14 +241,10 @@ async function handleDeleteSecret(token, ecosystem, secretName) {
  */
 async function handleAdmin(token) {
   try {
-    const isLocalDev = process.env.NODE_ENV === 'development' || 
-                       !process.env.MYKEYS_URL || 
-                       process.env.MYKEYS_URL.includes('localhost') ||
-                       process.env.MYKEYS_URL.includes('127.0.0.1');
-    
+    const isLocalDev = isLocalDevelopment();
     const url = isLocalDev 
       ? `/api/admin/info`
-      : `${MYKEYS_URL || ''}/api/admin/info`;
+      : `${MYKEYS_URL}/api/admin/info`;
     
     // Debug: log request
     console.log('[cli-handler] Admin API request:', { url, hasToken: !!token });
@@ -406,17 +401,44 @@ function apiRequest(method, url, body, token) {
     // For relative URLs in Node.js context, construct full URL
     // In local development, always use localhost instead of production URL
     if (useRelative && typeof window === 'undefined') {
-      // Detect local development: if NODE_ENV is development or if MYKEYS_URL points to production
-      const isLocalDev = process.env.NODE_ENV === 'development' || 
-                        !process.env.MYKEYS_URL || 
-                        process.env.MYKEYS_URL.includes('localhost') ||
-                        process.env.MYKEYS_URL.includes('127.0.0.1');
+      // Detect local development: check NODE_ENV and Vercel environment
+      const isVercel = process.env.VERCEL || process.env.VERCEL_URL || process.env.VERCEL_ENV;
+      const isLocalDev = process.env.NODE_ENV === 'development' && !isVercel;
       
-      const baseUrl = isLocalDev ? 'http://localhost:8080' : (MYKEYS_URL || 'http://localhost:8080');
+      // Determine base URL:
+      // - If explicitly set MYKEYS_URL, use it
+      // - If on Vercel (production), use production URL
+      // - If local dev, use localhost
+      // - Otherwise default to production URL (safer default)
+      let baseUrl;
+      if (MYKEYS_URL && MYKEYS_URL !== 'https://mykeys.zip') {
+        // Use explicitly set MYKEYS_URL (could be custom)
+        baseUrl = MYKEYS_URL;
+      } else if (isLocalDev) {
+        // Local development - only use localhost if explicitly in dev mode
+        baseUrl = 'http://localhost:8080';
+      } else {
+        // Production (Vercel or default) - always use production URL
+        // This is the safe default - if we're not explicitly in local dev, use production
+        baseUrl = 'https://mykeys.zip';
+      }
+      
+      // Debug logging (only in development)
+      if (process.env.NODE_ENV === 'development') {
+        console.log('[cli-handler] API request URL construction:', {
+          isVercel,
+          isLocalDev,
+          baseUrl,
+          url,
+          finalUrl: new URL(url, baseUrl).href
+        });
+      }
+      
       urlObj = new URL(url, baseUrl);
     } else if (useRelative) {
       // Browser context - use fetch (but this is server-side, so shouldn't happen)
-      urlObj = new URL(url, 'http://localhost:8080');
+      // Default to production URL for safety
+      urlObj = new URL(url, 'https://mykeys.zip');
     }
     
     const options = {
