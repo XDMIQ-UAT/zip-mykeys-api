@@ -655,6 +655,13 @@
                     return;
                 }
                 
+                // Debug: Log what we're sending (only in console, not to user)
+                console.log('[CLI] Executing command:', {
+                    command,
+                    email: currentEmail ? `${currentEmail.substring(0, 3)}***` : 'MISSING',
+                    hasToken: !!sessionToken
+                });
+                
                 const fetchPromise = fetch(`${API_BASE}/api/cli/execute`, {
                     method: 'POST',
                     headers: {

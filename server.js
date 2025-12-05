@@ -221,12 +221,33 @@ const authenticate = async (req, res, next) => {
             let userEmail = null;
             
             // Try to get email from request body, header, or query
+            // Check body first (most reliable)
             if (req.body && req.body.email) {
               userEmail = req.body.email.trim().toLowerCase();
-            } else if (req.headers['x-user-email']) {
+            } 
+            // Check header (case-insensitive - Express normalizes to lowercase)
+            else if (req.headers['x-user-email']) {
               userEmail = req.headers['x-user-email'].trim().toLowerCase();
-            } else if (req.query && req.query.email) {
+            } 
+            // Also check uppercase version (in case Express doesn't normalize)
+            else if (req.headers['X-User-Email']) {
+              userEmail = req.headers['X-User-Email'].trim().toLowerCase();
+            }
+            // Check query params
+            else if (req.query && req.query.email) {
               userEmail = req.query.email.trim().toLowerCase();
+            }
+            
+            // Debug logging for email retrieval (only in development)
+            if (!userEmail && process.env.NODE_ENV === 'development') {
+              console.log('[auth] Email not found in request:', {
+                hasBody: !!req.body,
+                bodyEmail: req.body?.email,
+                headers: Object.keys(req.headers).filter(k => k.toLowerCase().includes('email')),
+                xUserEmail: req.headers['x-user-email'],
+                XUserEmail: req.headers['X-User-Email'],
+                queryEmail: req.query?.email
+              });
             }
             
             // Verify provided email matches session hash
@@ -4408,6 +4429,32 @@ app.get('/oauth2callback', (req, res) => {
   }
   
   res.redirect('/role-management.html');
+});
+
+// ========== TwiML Webhook Endpoint ==========
+// Endpoint to serve custom TwiML for phone calls
+app.get('/api/twiml/call-message', (req, res) => {
+  res.type('text/xml');
+  res.send(`<?xml version="1.0" encoding="UTF-8"?>
+<Response>
+    <Say voice="alice" language="en-US">
+        Hello! This is Composer, your AI coding assistant from Cursor.
+    </Say>
+    <Pause length="1"/>
+    <Say voice="alice" language="en-US">
+        I've customized the call script with a personalized message. 
+        The Twilio integration is working perfectly, and I can now make calls programmatically.
+    </Say>
+    <Pause length="1"/>
+    <Say voice="alice" language="en-US">
+        This demonstrates how AI assistants can interact with real-world services like Twilio. 
+        Pretty cool, right?
+    </Say>
+    <Pause length="1"/>
+    <Say voice="alice" language="en-US">
+        Thanks for letting me test this out! Have a great day!
+    </Say>
+</Response>`);
 });
 
 // Load modular routes from routes directory
